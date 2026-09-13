@@ -43,7 +43,7 @@ Most sources serve CORS headers directly. Three do not (Meteoalarm, WMO SWIC), s
 
 Clone this repo, then set `PROXY_BASE` at the top of `natural_events.js` to your own worker URL.
 This github pages site is using a free worker, so too many requests will likely reach the 100k invocation limit.
-Leave it empty to disable the relay (those four sources will then fail to
+Leave it empty to disable the relay (those three sources will then fail to
 load).
 
 ## Data sources and attribution
