@@ -1,5 +1,5 @@
 /**
- * Natural Events Dashboard — CORS Proxy Worker
+ * WeatherDash — CORS Proxy Worker
  *
  * Validates the ?url= parameter against a hostname allowlist,
  * forwards the request upstream, and injects CORS headers on the response.

@@ -27,8 +27,8 @@ overlays, with no build step and no backend beyond a tiny CORS relay.
 | File | Purpose |
 |---|---|
 | `index.html` | Page markup: header, alert bar, map, layers panel, legend, sidebar panels. |
-| `natural_events.css` | All styling and theme variables. |
-| `natural_events.js` | Application code, organised one section per data source (state, load, parse, render, plot, fly-to). |
+| `weatherdash.css` | All styling and theme variables. |
+| `weatherdash.js` | Application code, organised one section per data source (state, load, parse, render, plot, fly-to). |
 | `cors-proxy-worker.js` | Cloudflare worker code for personal setup (preferred) |
 
 ## CORS relay
@@ -38,7 +38,7 @@ Most sources serve CORS headers directly. Three do not (Meteoalarm, WMO, SWIC), 
 
 The worker accepts only `GET`/`HEAD` with a `?url=` parameter, allows only HTTPS targets whose hostname is on a fixed allowlist, forwards no cookies or credentials and strips them from responses, and adds CORS headers and a 20-second upstream timeout.
 
-Clone this repo, then set `PROXY_BASE` at the top of `natural_events.js` to your own worker URL.
+Clone this repo, then set `PROXY_BASE` at the top of `weatherdash.js` to your own worker URL.
 This github pages site is using a free worker, so too many requests will likely reach the 100k invocation limit.
 Leave it empty to disable the relay (those three sources will then fail to
 load).
