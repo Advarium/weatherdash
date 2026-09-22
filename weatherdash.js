@@ -2029,7 +2029,7 @@ function renderStatePanels(alerts) {
         areaDesc: nwsAreaFor(props, key),
         onset:    props.sent || props.effective || '',
         expires:  props.expires || props.ends || '',
-        flyFn:    `flyToAlert('${String(alert.id).replace(/'/g, "\\'")}')`,
+        flyFn:    `flyToAlert('${String(alert.id).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}')`,
       });
     }
   }
