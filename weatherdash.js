@@ -4921,7 +4921,7 @@ function normalizeGDACS(data) {
     expires:  null,
     centLat:  event.lat,
     centLon:  event.lon,
-    flyFn:    event.lat != null ? `flyToGDACS('${event.guid.replace(/'/g,"\\'")}')` : null,
+    flyFn:    event.lat != null ? `flyToGDACS('${event.guid.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}')` : null,
   }));
 }
 
