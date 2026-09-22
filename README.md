@@ -12,7 +12,7 @@ overlays, with no build step and no backend beyond a tiny CORS relay.
   toggleable overlays, and click-to-locate from every sidebar row.
 - **Cross-source alert index.** European (Meteoalarm), global (WMO, GDACS)
   and regional alerts are normalized into one store and rendered as
-  per-country panels grouped by continent and sub-region, sorted by severity.
+  per-country panels grouped by continent and sub-region, sorted by severity. US NWS alerts are grouped per region.
 - **Header summary** of Extreme / Severe / Moderate counts across all sources,
   a live/stale data indicator and a local clock.
 - **"Happening now" bar** that rotates through the five most recent items
