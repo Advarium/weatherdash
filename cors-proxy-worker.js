@@ -10,6 +10,7 @@
  * Usage from the dashboard:
  *   const PROXY = 'https://<name>.<account>.workers.dev';
  *   fetch(`${PROXY}/?url=${encodeURIComponent(targetUrl)}`)
+ *   fetch(`${PROXY}/meteoalarm?countries=austria,belgium,…`)   // all feeds, one request
  */
 
 // ── Allowlist ────────────────────────────────────────────────────────────────
@@ -38,6 +39,67 @@ function err(status, message) {
   });
 }
 
+// ── Meteoalarm bundle ────────────────────────────────────────────────────────
+// GET /meteoalarm?countries=austria,belgium,…  →  {"austria":<feed>,"belgium":<feed>,…}
+// One invocation instead of one per country. Every feed is downloaded in
+// parallel (their bodies must all be read at once — reading them one after
+// another stalls the rest behind the slowest), then written out in order
+// without being parsed, so CPU time stays tiny although the feeds total ~15 MB.
+// A feed that fails, times out or looks truncated becomes null.
+// Every country is a subrequest; the free tier allows 50 per invocation.
+const METEOALARM_FEED = 'https://feeds.meteoalarm.org/api/v1/warnings/feeds-';
+const METEOALARM_SLUG = /^[a-z]+(?:-[a-z]+)*$/;
+const METEOALARM_MAX  = 45;
+
+// Last non-whitespace byte is "}" — a cheap guard against a cut-off body
+function endsLikeJsonObject(bytes) {
+  for (let i = bytes.length - 1; i >= 0; i--) {
+    if (bytes[i] > 0x20) return bytes[i] === 0x7d;
+  }
+  return false;
+}
+
+function meteoalarmBundle(countries) {
+  const pending = countries.map(async slug => {
+    try {
+      const upstream = await fetch(METEOALARM_FEED + slug, {
+        headers: { 'Accept': 'application/json', 'User-Agent': 'weatherdash/1.0 (CORS proxy)' },
+        signal:  AbortSignal.timeout(25_000),
+      });
+      if (!upstream.ok || !/json/i.test(upstream.headers.get('Content-Type') || '')) {
+        upstream.body?.cancel();
+        return null;
+      }
+      const bytes = new Uint8Array(await upstream.arrayBuffer());
+      return endsLikeJsonObject(bytes) ? bytes : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const { readable, writable } = new TransformStream();
+  const encoder = new TextEncoder();
+
+  const writer = writable.getWriter();
+  (async () => {
+    for (const [index, slug] of countries.entries()) {
+      await writer.write(encoder.encode(`${index ? ',' : '{'}"${slug}":`));
+      await writer.write((await pending[index]) || encoder.encode('null'));
+    }
+    await writer.write(encoder.encode('}'));
+    await writer.close();
+  })().catch(e => writer.abort(e).catch(() => {}));
+
+  return new Response(readable, {
+    headers: {
+      'Content-Type':  'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Proxied-By':  'weatherdash',
+      ...CORS,
+    },
+  });
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 export default {
   async fetch(request) {
@@ -52,8 +114,17 @@ export default {
       return err(405, 'Only GET requests are supported');
     }
 
-    // Parse ?url= parameter.
     const incoming = new URL(request.url);
+
+    if (incoming.pathname === '/meteoalarm') {
+      const countries = (incoming.searchParams.get('countries') || '').split(',').filter(Boolean);
+      if (!countries.length || countries.length > METEOALARM_MAX || !countries.every(slug => METEOALARM_SLUG.test(slug))) {
+        return err(400, `countries= must list 1–${METEOALARM_MAX} lowercase feed slugs`);
+      }
+      return meteoalarmBundle(countries);
+    }
+
+    // Parse ?url= parameter.
     const raw = incoming.searchParams.get('url');
     if (!raw) return err(400, 'Missing required ?url= query parameter');
 

@@ -33,10 +33,14 @@ overlays, with no build step and no backend beyond a tiny CORS relay.
 
 ## CORS relay
 
-Most sources serve CORS headers directly. Three do not (Meteoalarm, WMO, SWIC), so requests to them go through
+Most sources serve CORS headers directly. Three do not (Meteoalarm, WMO SWIC, GDACS), so requests to them go through
 `cors-proxy-worker.js`, deployed as a Cloudflare Worker. 
 
 The worker accepts only `GET`/`HEAD` with a `?url=` parameter, allows only HTTPS targets whose hostname is on a fixed allowlist, forwards no cookies or credentials and strips them from responses, and adds CORS headers and a 20-second upstream timeout.
+
+It also has a `/meteoalarm?countries=…` route that fetches every Meteoalarm country feed in one invocation and returns them as a single JSON object, so a Meteoalarm refresh costs one worker request instead of 39. Deploy the updated worker to use it. Against an older worker the dashboard falls back to per-country requests.
+
+Proxied sources (Meteoalarm, WMO, GDACS) refresh every 10 minutes but pause while the tab is hidden, and catch up as soon as it is shown again. A visible tab uses about 24 worker requests an hour.
 
 Clone this repo, then set `PROXY_BASE` at the top of `weatherdash.js` to your own worker URL.
 This github pages site is using a free worker, so too many requests will likely reach the 100k invocation limit.
@@ -67,15 +71,16 @@ redistribution.
 | [NWPS River Gauges](https://water.noaa.gov/) | River gauge flood status (ArcGIS) | NOAA National Water Prediction Service | US Government work, public domain |
 | [US Drought Monitor](https://droughtmonitor.unl.edu/) | Weekly drought intensity polygons | National Drought Mitigation Center, USDA, NOAA | Free to use with citation: "The U.S. Drought Monitor is jointly produced by the National Drought Mitigation Center at the University of Nebraska-Lincoln, the United States Department of Agriculture, and the National Oceanic and Atmospheric Administration. Map courtesy of NDMC." |
 | [MSC GeoMet](https://api.weather.gc.ca/) | Canadian weather alerts | Environment and Climate Change Canada | [Data Servers End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) |
-| [GDACS](https://www.gdacs.org/) | Global disaster alerts (RSS) | European Commission Joint Research Centre | GDACS [terms](https://www.gdacs.org/About/termofuse.aspx) |
+| [GDACS](https://www.gdacs.org/) | Global disaster alerts (RSS), and modelled tsunami wave height for earthquakes (event API) | European Commission Joint Research Centre | GDACS [terms](https://www.gdacs.org/About/termofuse.aspx) |
 | [Meteoalarm](https://meteoalarm.org/) | Severe weather warnings for 39 European countries (CAP feeds) | EUMETNET | Attribution required; see [Meteoalarm terms](https://meteoalarm.org/en/live/page/terms-and-conditions) |
 | [WMO SWIC](https://severeweather.wmo.int/) | Global severe weather alerts (WFS) | World Meteorological Organization, hosted by Hong Kong Observatory | WMO [terms](https://severeweather.wmo.int/) |
+| [Active Hurricanes, Cyclones and Typhoons](https://www.arcgis.com/home/item.html?id=248e7b5827a34b248647afb012c58787) | Tropical cyclone tracks, forecast cones, coastal watches and warnings, 5-day wind speed probabilities (ArcGIS feature service) | NOAA National Hurricane Center and Joint Typhoon Warning Center, compiled by Esri Living Atlas | Esri [Master License Agreement](https://www.esri.com/en-us/legal/terms/full-master-agreement); underlying NHC data is US Government work, public domain |
 
 ### Weather, ocean and climate overlays
 
 | Source | Layer | Provider | Terms |
 |---|---|---|---|
-| [Open-Meteo](https://open-meteo.com/) | Surface wind barbs | Open-Meteo | [CC BY 4.0](https://open-meteo.com/en/terms), non-commercial free tier |
+| [Current Weather and Wind Station Data](https://www.arcgis.com/home/item.html?id=cb1886ff0a9d4156ba4d2fadd7e8a139) | Surface wind barbs and station observations (METAR stations and NDBC buoys, ArcGIS feature service) | NOAA Aviation Weather Center and National Data Buoy Center, compiled by Esri Living Atlas | Esri [Master License Agreement](https://www.esri.com/en-us/legal/terms/full-master-agreement); underlying NOAA data is US Government work, public domain |
 | [RainViewer](https://www.rainviewer.com/) | Global radar composite tiles | RainViewer | Free tier with attribution; see [API terms](https://www.rainviewer.com/api.html) |
 | [Iowa State IEM](https://mesonet.agron.iastate.edu/) | NEXRAD composite reflectivity (CONUS) | Iowa Environmental Mesonet | Free service, attribution requested, provided on map |
 | [DWD GeoServer](https://maps.dwd.de/) | German radar composite (WMS) | Deutscher Wetterdienst | [DWD open data](https://www.dwd.de/EN/service/copyright/copyright_node.html), attribution required, provided on map |
@@ -87,7 +92,7 @@ redistribution.
 
 | Source | Used for | Terms |
 |---|---|---|
-| [Esri World Dark Gray Base](https://www.arcgis.com/home/item.html?id=1970c1995b8f44749f4b9b6e81b5ba45) and [World Imagery](https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9) | Basemap tiles | Esri [Terms of Use](https://www.esri.com/en-us/legal/terms/full-master-agreement); attribution to Esri and its data partners is shown on the map |
+| [Esri World Dark Gray Base](https://www.arcgis.com/home/item.html?id=1970c1995b8f44749f4b9b6e81b5ba45) and [World Imagery](https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9), with the World Dark Gray Reference and World Boundaries and Places label layers | Basemap tiles and place-name labels | Esri [Terms of Use](https://www.esri.com/en-us/legal/terms/full-master-agreement); attribution to Esri and its data partners is shown on the map |
 | [OpenStreetMap](https://www.openstreetmap.org/copyright) | Data underlying the Esri dark basemap and Photon | © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/) |
 | [Photon](https://photon.komoot.io/) | Address and place search | komoot, Apache 2.0; public instance for fair use |
 | [Leaflet](https://leafletjs.com/) 1.9.4 | Map rendering | BSD 2-Clause |

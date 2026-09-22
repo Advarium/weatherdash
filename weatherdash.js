@@ -346,7 +346,7 @@ function initMap() {
     maxZoom: 19
   });
   baseSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; <a href="https://www.esri.com/" target="_blank">Esri</a> &mdash; Source: Esri, Maxar, Earthstar Geographics',
+    attribution: 'Tiles &copy; <a href="https://www.esri.com/" target="_blank">Esri</a> &mdash; Source: Esri, Vantor, Earthstar Geographics',
     maxZoom: 19
   });
 
@@ -361,7 +361,9 @@ function initMap() {
     pane: 'labels', maxZoom: 19
   });
   baseSatLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-    pane: 'labels', maxZoom: 19
+    pane: 'labels', maxZoom: 19,
+    // The imagery credit doesn't cover the label data; the dark labels share the dark basemap's credit
+    attribution: 'Labels: Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
   });
   baseDark.addTo(map);
   baseDarkLabels.addTo(map);
@@ -545,7 +547,7 @@ function initMap() {
   });
 
   // All overlay layers start hidden — user enables what they want
-  windLayer       = L.layerGroup();
+  windLayer       = L.layerGroup([], { attribution: 'Wind: NOAA METAR and NDBC buoys via <a href="https://www.arcgis.com/home/item.html?id=cb1886ff0a9d4156ba4d2fadd7e8a139" target="_blank">Esri Living Atlas</a>' });
   droughtLayer    = L.layerGroup();
   spcD2Layer      = L.layerGroup();
   spcD3Layer      = L.layerGroup();
@@ -562,6 +564,8 @@ function initMap() {
   easLayer        = L.layerGroup();
   eonetLayer      = L.layerGroup();
   eqLayer         = L.layerGroup();
+  hurLayer        = L.layerGroup([], { attribution: 'Tropical cyclones: NHC, JTWC via <a href="https://www.arcgis.com/home/item.html?id=248e7b5827a34b248647afb012c58787" target="_blank">Esri Living Atlas</a>' });
+  hurProbLayer    = L.layerGroup();
 
   // Legend is the collapsible right-side sidebar (#map-legend-sidebar) — no Leaflet control needed
 }
@@ -595,15 +599,20 @@ function toggleLayer(which) {
     updateMapCount();
     return;
   }
-  const layers = { eq: eqLayer, eas: easLayer, lsr: lsrLayer, eonet: eonetLayer, drought: droughtLayer, gauge: gaugeLayer, volc: volcLayer, gdacs: gdacsLayer, meteoalarm: meteoalarmLayer, wmo: wmoLayer, 'spc-d1': spcD1Layer, 'spc-d2': spcD2Layer, 'spc-d3': spcD3Layer, 'fwx-d1': fwxD1Layer, 'fwx-d2': fwxD2Layer, msc: mscLayer, radar: radarLayer, imerg: imergLayer, goesw: goesWLayer, goese: goesELayer, grace: graceLayer, 'smap-root': smapRootLayer, 'smap-surf': smapSurfLayer, 'dwd-radar': dwdRadarLayer, 'fmi-radar': fmiRadarLayer, sst: sstLayer, seaice: seaIceLayer, wind: windLayer, ozone: ozoneLayer, so2: so2Layer, himawari: himawariLayer, meteosat: meteosatLayer };
+  const layers = { eq: eqLayer, eas: easLayer, lsr: lsrLayer, eonet: eonetLayer, drought: droughtLayer, gauge: gaugeLayer, volc: volcLayer, gdacs: gdacsLayer, meteoalarm: meteoalarmLayer, wmo: wmoLayer, 'spc-d1': spcD1Layer, 'spc-d2': spcD2Layer, 'spc-d3': spcD3Layer, 'fwx-d1': fwxD1Layer, 'fwx-d2': fwxD2Layer, msc: mscLayer, radar: radarLayer, imerg: imergLayer, goesw: goesWLayer, goese: goesELayer, grace: graceLayer, 'smap-root': smapRootLayer, 'smap-surf': smapSurfLayer, 'dwd-radar': dwdRadarLayer, 'fmi-radar': fmiRadarLayer, sst: sstLayer, seaice: seaIceLayer, wind: windLayer, hur: hurLayer, hurprob: hurProbLayer, ozone: ozoneLayer, so2: so2Layer, himawari: himawariLayer, meteosat: meteosatLayer };
   const el = document.getElementById(`toggle-${which}`);
   if (el && layers[which]) {
     el.checked ? map.addLayer(layers[which]) : map.removeLayer(layers[which]);
   }
-  // Wind is fetched per-viewport, so it needs data the moment it's switched on
+  // Wind needs data the moment it's switched on (reuses a load under 5 min old)
   if (which === 'wind') {
     if (el?.checked) loadWind();
-    else { _windAbort?.abort(); windData = []; windLayer?.clearLayers(); }
+    else windLayer?.clearLayers();
+  }
+  // Wind probabilities are fetched only while shown, for the selected threshold
+  if (which === 'hurprob') {
+    if (el?.checked) loadHurricaneProbs();
+    else hurProbLayer?.clearLayers();
   }
   updateMapCount();
 }
@@ -723,15 +732,28 @@ function searchLiveEvents(query) {
           (props.areaDesc || '').split(';')[0].trim(), () => flyToAlert(alert.id));
     }
   }
+  // Wind stations: exact ICAO/buoy ID, or name (only once loaded, i.e. layer used)
+  let stationHits = 0;
+  for (const obs of windData) {
+    if (stationHits >= 3) break;
+    const code = (obs.props.ICAO || obs.props.STATIONID || '').toLowerCase();
+    const name = (obs.props.STATION_NAME || '').toLowerCase();
+    if (code === q || (q.length >= 3 && name.includes(q))) {
+      stationHits++;
+      add('Wind', '#83c092', obs.props.STATION_NAME || `Buoy ${obs.props.STATIONID}`,
+          [obs.props.ICAO, obs.props.COUNTRY].filter(Boolean).join(' · ') || 'NDBC buoy',
+          () => flyToWindStation(obs));
+    }
+  }
   for (const event of gdacsData) {
-    if (hits.length >= 13) break;
+    if (hits.length >= 13 + stationHits) break;
     if (`${event.name || ''} ${event.country || ''}`.toLowerCase().includes(q)) {
       add('GDACS', '#a7c080', event.name || event.type,
           event.country || '', () => flyToGDACS(event.guid));
     }
   }
   for (const volcano of vhpData) {
-    if (hits.length >= 16) break;
+    if (hits.length >= 16 + stationHits) break;
     if ((volcano.volcano_name || '').toLowerCase().includes(q) && volcano.latitude != null) {
       add('Volcano', '#e69875', volcano.volcano_name, volcano.obs_fullname || '',
           () => flyToVolc(`vhp-${volcano.vnum}`, volcano.latitude, volcano.longitude));
@@ -2089,14 +2111,27 @@ function plotDrought() {
 }
 
 /* ══════════════════════════════════════════════════════
-   SURFACE WIND — station barbs via Open-Meteo (no key, CORS)
-   Samples a grid across the current viewport, so density stays
-   usable at every zoom instead of being fixed to a city list.
+   SURFACE WIND — observed station barbs
+   METAR airport stations (~5,650) and NDBC buoys (~930) worldwide via the
+   Esri Living Atlas "Current Weather and Wind Station Data" feed. CORS-enabled,
+   cached 5 min upstream. The whole set is two requests (~320 KB gzip) every
+   10 minutes; panning and zooming only re-thin what is already loaded.
+   Feed units: wind km/h, temperatures °F, pressure hPa, visibility m.
 ══════════════════════════════════════════════════════ */
 
-let windData = [];
-let _windAbort = null;      // cancels an in-flight fetch when the view moves again
+const WIND_BASE = 'https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/NOAA_METAR_current_wind_speed_direction_v1/FeatureServer';
+const WIND_STATION_FIELDS = 'ICAO,STATION_NAME,COUNTRY,OBS_DATETIME,TEMP,DEW_POINT,R_HUMIDITY,WIND_DIRECT,WIND_SPEED,WIND_GUST,VISIBILITY,PRESSURE,SKY_CONDTN,FLT_CATEGORY';
+const WIND_BUOY_FIELDS    = 'STATIONID,OBS_DATETIME,WIND_DIRECT,WIND_SPEED,WIND_GUST,AIR_TEMP,WATER_TEMP,DEWPOINT_TEMP,ATM_PRESSURE,WAVE_HEIGHT,DOM_WAVE_PERIOD,VISIBILITY';
+const WIND_MAX_AGE_MS = 3 * 3_600_000;   // ~10% of reports are stale, some by weeks
+const WIND_MAX_KMH    = 300;             // sanity cap for corrupt reports
+const WIND_CELL_PX    = 64;              // one barb per cell of this size on screen
+
+let windData = [];           // cleaned observations: { lat, lon, knots, dir, props, kind }
+let _windLoadedAt = 0;
 let _windDebounce = null;
+
+const kmhToKt = kmh => kmh / 1.852;
+const fToC    = f => (f - 32) * 5 / 9;
 
 // Speed → colour ramp (knots), matching the dashboard's severity palette
 function windColor(knots) {
@@ -2122,8 +2157,8 @@ function windBarbIcon(knots, dirDeg) {
   const color = windColor(knots);
   let shapes = '';
 
-  if (knots < 2) {
-    // Calm — open circle, no staff
+  if (knots < 2 || dirDeg == null) {
+    // Calm, or variable with no reported direction — open circle, no staff
     shapes = `<circle cx="${cx}" cy="${cy}" r="4.5" fill="none"/>`;
   } else {
     shapes += `<line x1="${cx}" y1="${cy}" x2="${cx}" y2="${tipY}"/>`;
@@ -2151,7 +2186,7 @@ function windBarbIcon(knots, dirDeg) {
 
   const html =
     `<svg width="44" height="44" viewBox="0 0 44 44" style="overflow:visible">` +
-      `<g transform="rotate(${dirDeg} ${cx} ${cy})">` +
+      `<g transform="rotate(${dirDeg ?? 0} ${cx} ${cy})">` +
         g('rgba(0,0,0,0.85)', 4.0, 'rgba(0,0,0,0.85)') +   // halo
         g(color, 1.6, color) +                             // glyph
       `</g>` +
@@ -2166,83 +2201,125 @@ function windBarbIcon(knots, dirDeg) {
   });
 }
 
-// Build a lat/lon sample grid across the visible map, clamped to valid ranges
-function windGridForView() {
-  const bounds = map.getBounds();
-  const south = Math.max(bounds.getSouth(), -82);
-  const north = Math.min(bounds.getNorth(),  82);
-  const west  = bounds.getWest();
-  const east  = bounds.getEast();
-  if (north <= south || east <= west) return [];
-
-  const COLS = 7, ROWS = 5;                 // 35 points → one batched request
-  const points = [];
-  for (let row = 0; row < ROWS; row++) {
-    for (let col = 0; col < COLS; col++) {
-      const lat = south + ((row + 0.5) / ROWS) * (north - south);
-      let   lon = west  + ((col + 0.5) / COLS) * (east  - west);
-      lon = ((lon + 180) % 360 + 360) % 360 - 180;   // normalise across the antimeridian
-      points.push([+lat.toFixed(3), +lon.toFixed(3)]);
-    }
-  }
-  return points;
-}
-
-async function loadWind() {
+// Fetch every station and buoy (two requests), clean, and keep in windData
+async function loadWind(force = false) {
   if (!map || !windLayer) return;
-  // Only fetch when the layer is actually switched on
+  // Only fetch while the layer is on, and not again within the feed's 5-min cache
   if (!document.getElementById('toggle-wind')?.checked) return;
+  if (!force && windData.length && Date.now() - _windLoadedAt < 5 * 60_000) { plotWind(); return; }
 
-  const points = windGridForView();
-  if (!points.length) return;
-
-  _windAbort?.abort();
-  _windAbort = new AbortController();
-
-  const params = new URLSearchParams({
-    latitude:  points.map(p => p[0]).join(','),
-    longitude: points.map(p => p[1]).join(','),
-    current:   'wind_speed_10m,wind_direction_10m,wind_gusts_10m',
-    wind_speed_unit: 'kn',
-  });
+  const query = (layerId, fields) => {
+    const params = new URLSearchParams({ where: '1=1', outFields: fields, geometryPrecision: '3', f: 'geojson' });
+    return fetch(`${WIND_BASE}/${layerId}/query?${params}`, { signal: AbortSignal.timeout(30000) })
+      .then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
+      .then(payload => { if (payload.error) throw new Error(payload.error.message); return payload.features || []; });
+  };
   try {
-    const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`,
-      { signal: _windAbort.signal });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
-    // Open-Meteo returns a bare object for one point, an array for many
-    windData = (Array.isArray(payload) ? payload : [payload])
-      .filter(entry => entry?.current?.wind_speed_10m != null);
-    plotWind();
-    noteDataLoaded();
+    const [stations, buoys] = await Promise.all([query(0, WIND_STATION_FIELDS), query(1, WIND_BUOY_FIELDS)]);
+    const now = Date.now();
+    const clean = (features, kind) => features.flatMap(feature => {
+      const props = feature.properties;
+      const kmh   = props.WIND_SPEED;
+      if (typeof kmh !== 'number' || kmh < 0 || kmh > WIND_MAX_KMH) return [];
+      if (!props.OBS_DATETIME || now - props.OBS_DATETIME > WIND_MAX_AGE_MS) return [];
+      const [lon, lat] = feature.geometry.coordinates;
+      const dir = typeof props.WIND_DIRECT === 'number' ? props.WIND_DIRECT % 360 : null;
+      return [{ lat, lon, knots: kmhToKt(kmh), dir, props, kind }];
+    });
+    windData = [...clean(stations, 'station'), ...clean(buoys, 'buoy')];
+    _windLoadedAt = now;
   } catch (err) {
-    if (err.name !== 'AbortError') console.warn('Wind load failed:', err.message);
+    console.warn('Wind stations load failed:', err.message);
+    return;
   }
+  plotWind();
+  noteDataLoaded();
 }
 
+/* One barb per WIND_CELL_PX square. Cells are fixed to the map's pixel grid at
+   the current zoom (not the screen), so panning never swaps which station
+   represents a cell. Within a cell the station nearest the cell centre wins:
+   representative and stable across refreshes, where "strongest wind" would
+   exaggerate conditions when zoomed out. */
 function plotWind() {
   if (!windLayer) return;
   windLayer.clearLayers();
-  for (const entry of windData) {
-    const current = entry.current;
-    const knots   = current.wind_speed_10m;
-    const dir     = current.wind_direction_10m ?? 0;
-    const gust    = current.wind_gusts_10m;
-    const marker  = L.marker([entry.latitude, entry.longitude], {
-      icon: windBarbIcon(knots, dir),
-      interactive: true,
+  if (!windData.length) return;
+
+  const zoom   = map.getZoom();
+  const view   = map.getBounds().pad(0.1);
+  const cells  = new Map();
+  for (const obs of windData) {
+    if (!view.contains([obs.lat, obs.lon])) continue;
+    const pt  = map.project([obs.lat, obs.lon], zoom);
+    const cx  = Math.floor(pt.x / WIND_CELL_PX), cy = Math.floor(pt.y / WIND_CELL_PX);
+    const key = `${cx},${cy}`;
+    const dx  = pt.x - (cx + 0.5) * WIND_CELL_PX, dy = pt.y - (cy + 0.5) * WIND_CELL_PX;
+    const dist = dx * dx + dy * dy;
+    const cell = cells.get(key);
+    if (!cell) cells.set(key, { obs, dist, count: 1 });
+    else {
+      cell.count++;
+      if (dist < cell.dist) { cell.obs = obs; cell.dist = dist; }
+    }
+  }
+
+  for (const { obs, count } of cells.values()) {
+    const marker = L.marker([obs.lat, obs.lon], {
+      icon: windBarbIcon(obs.knots, obs.knots < 2 ? 0 : obs.dir),
       zIndexOffset: 300,
     });
-    marker.bindPopup(`<div class="popup-inner">
-      <div class="popup-title">💨 Surface Wind</div>
-      <div class="popup-sub">${entry.latitude.toFixed(2)}°, ${entry.longitude.toFixed(2)}°</div>
-      <div class="popup-row"><span>Speed</span><span style="color:${windColor(knots)};font-weight:600">${knots.toFixed(0)} kt</span></div>
-      <div class="popup-row"><span>Direction</span><span>${Math.round(dir)}° (${compassPoint(dir)})</span></div>
-      ${gust != null ? `<div class="popup-row"><span>Gusts</span><span>${gust.toFixed(0)} kt</span></div>` : ''}
-      <div class="popup-row" style="font-size:10px;color:var(--muted)">Barb points into the wind · 10 m above ground</div>
-    </div>`);
+    // Popup HTML is built on open, so thousands of hidden strings aren't made per pan
+    marker.bindPopup(() => windPopupHtml(obs, count - 1));
     windLayer.addLayer(marker);
   }
+}
+
+function windPopupHtml(obs, hiddenNearby) {
+  const props = obs.props;
+  const row   = (label, value) => value == null || value === '' ? '' : `<div class="popup-row"><span>${label}</span><span>${value}</span></div>`;
+  const temp  = f => typeof f === 'number' ? `${Math.round(fToC(f))} °C (${Math.round(f)} °F)` : null;
+  const kt    = kmh => typeof kmh === 'number' && kmh > 0 ? `${Math.round(kmhToKt(kmh))} kt (${Math.round(kmh)} km/h)` : null;
+  const wind  = obs.knots < 2 ? 'Calm'
+    : `<span style="color:${windColor(obs.knots)};font-weight:600">${Math.round(obs.knots)} kt</span> ` +
+      (obs.dir == null ? 'variable' : `from ${compassPoint(obs.dir)} (${Math.round(obs.dir)}°)`);
+  const isBuoy = obs.kind === 'buoy';
+  const title  = isBuoy ? `🌊 Buoy ${esc(props.STATIONID)}`
+                        : `💨 ${esc(props.STATION_NAME || props.ICAO)}${props.ICAO ? ` <span style="opacity:.6">${esc(props.ICAO)}</span>` : ''}`;
+  const sub    = isBuoy ? 'NDBC moored buoy' : esc(props.COUNTRY || '');
+  const vis    = typeof props.VISIBILITY === 'number' && props.VISIBILITY > 0
+    ? `${props.VISIBILITY >= 16000 ? '16+' : (props.VISIBILITY / 1000).toFixed(1)} km` : null;
+  return `<div class="popup-inner">
+    <div class="popup-title">${title}</div>
+    <div class="popup-sub">${sub}</div>
+    ${row('Observed', fmtTime(new Date(props.OBS_DATETIME).toISOString()))}
+    ${row('Wind', wind)}
+    ${row('Gusts', kt(props.WIND_GUST))}
+    ${row('Temperature', temp(isBuoy ? props.AIR_TEMP : props.TEMP))}
+    ${row('Dew point', temp(isBuoy ? props.DEWPOINT_TEMP : props.DEW_POINT))}
+    ${isBuoy ? row('Water', temp(props.WATER_TEMP)) : row('Humidity', typeof props.R_HUMIDITY === 'number' ? `${props.R_HUMIDITY}%` : null)}
+    ${isBuoy && typeof props.WAVE_HEIGHT === 'number' ? row('Waves', `${props.WAVE_HEIGHT} m${props.DOM_WAVE_PERIOD ? ` every ${props.DOM_WAVE_PERIOD} s` : ''}`) : ''}
+    ${row('Pressure', typeof (isBuoy ? props.ATM_PRESSURE : props.PRESSURE) === 'number' ? `${(isBuoy ? props.ATM_PRESSURE : props.PRESSURE).toFixed(1)} hPa` : null)}
+    ${row('Visibility', vis)}
+    ${isBuoy ? '' : row('Sky', props.SKY_CONDTN ? esc(props.SKY_CONDTN) : null)}
+    ${isBuoy ? '' : row('Flight category', props.FLT_CATEGORY ? esc(props.FLT_CATEGORY) : null)}
+    ${hiddenNearby > 0 ? `<div class="popup-row" style="font-size:10px;color:var(--muted)">+${hiddenNearby} nearby station${hiddenNearby === 1 ? '' : 's'}, zoom in to see</div>` : ''}
+    <div class="popup-row" style="font-size:10px;color:var(--muted)">Barb points into the wind · observed ${isBuoy ? 'at the buoy' : 'at 10 m'}</div>
+  </div>`;
+}
+
+// Open a station's popup, zooming in far enough that it has its own cell
+function flyToWindStation(obs) {
+  ensureLayerOn('wind');
+  map.flyTo([obs.lat, obs.lon], Math.max(map.getZoom(), 10), { duration: 1 });
+  map.once('moveend', () => {
+    clearTimeout(_windDebounce);     // the general moveend re-thin would close the popup
+    plotWind();
+    windLayer.eachLayer(marker => {
+      const ll = marker.getLatLng();
+      if (Math.abs(ll.lat - obs.lat) < 1e-6 && Math.abs(ll.lng - obs.lon) < 1e-6) marker.openPopup();
+    });
+  });
 }
 
 // Degrees → 16-point compass abbreviation
@@ -2894,6 +2971,7 @@ function plotGDACS() {
       ${event.country  ? `<div class="popup-row"><span>Country</span><span>${esc(event.country)}</span></div>` : ''}
       ${gdacsRows(event).map(([label, value, cls]) =>
         `<div class="popup-row"><span>${esc(label)}</span><span${cls ? ` class="${cls}"` : ''}>${esc(value)}</span></div>`).join('')}
+      ${event.type === 'TC' && event.name ? `<div class="popup-row"><a href="#" onclick="flyToHurricane('${esc(event.name.replace(/-\d+$/, '').replace(/'/g, ''))}');return false">Show forecast track →</a></div>` : ''}
       ${event.link     ? `<div class="popup-row"><a href="${esc(event.link)}" target="_blank" rel="noopener">GDACS Details ↗</a></div>` : ''}
     </div>`);
     if (event.calctype === 'tsunami') {
@@ -2909,6 +2987,296 @@ function flyToGDACS(guid) {
   if (!event || event.lat == null || event.lon == null || !map) return;
   map.flyTo([event.lat, event.lon], Math.max(map.getZoom(), 5), { duration: 1 });
   gdacsLayer.eachLayer(marker => { if (marker._gdacsGuid === guid) marker.openPopup(); });
+}
+
+/* ══════════════════════════════════════════════════════
+   TROPICAL CYCLONES — NHC (Atlantic, E/C Pacific) + JTWC (elsewhere)
+   Esri Living Atlas "Active Hurricanes, Cyclones and Typhoons" feature
+   service. CORS-enabled GeoJSON, cached 5 min upstream; advisories are
+   issued every 3–6 h. Polygons are simplified server-side (0.02°), which
+   cuts the wind-probability layers from ~870 KB to ~20 KB.
+══════════════════════════════════════════════════════ */
+
+const HUR_BASE  = 'https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/Active_Hurricanes_v1/FeatureServer';
+const HUR_LAYER = { fcstPoints: 0, obsPoints: 1, fcstTrack: 2, obsTrack: 3, cone: 4, watches: 5 };
+const HUR_PROB_LAYER = { 34: 7, 50: 8, 64: 9 };
+const HUR_PROB_LEVELS = [10, 50, 90];          // contour thresholds drawn as outlines
+
+// Saffir-Simpson class from sustained wind in knots
+const HUR_CLASSES = [
+  { max: 34,       label: 'Tropical Depression', short: 'TD', color: '#7fbbb3' },
+  { max: 64,       label: 'Tropical Storm',      short: 'TS', color: '#a7c080' },
+  { max: 83,       label: 'Category 1',          short: '1',  color: '#dbbc7f' },
+  { max: 96,       label: 'Category 2',          short: '2',  color: '#e69875' },
+  { max: 113,      label: 'Category 3',          short: '3',  color: '#e67e80' },
+  { max: 137,      label: 'Category 4',          short: '4',  color: '#d699b6' },
+  { max: Infinity, label: 'Category 5',          short: '5',  color: '#ff79c6' },
+];
+const HUR_WEAK = { label: 'Post-tropical / low', short: 'L', color: '#859289' };
+const hurClass = kt => HUR_CLASSES.find(cls => kt < cls.max);
+
+const HUR_WATCH = {
+  TWA: { label: 'Tropical Storm Watch',   color: '#dbbc7f', dash: '6 4' },
+  TWR: { label: 'Tropical Storm Warning', color: '#e69875', dash: null  },
+  HWA: { label: 'Hurricane Watch',        color: '#d699b6', dash: '6 4' },
+  HWR: { label: 'Hurricane Warning',      color: '#e67e80', dash: null  },
+};
+
+const hurAgency = basin => ['AL', 'EP', 'CP'].includes(basin) ? 'NHC' : 'JTWC';
+const hurKmh    = kt => Math.round(kt * 1.852);
+
+let hurData = { fcstPoints: [], obsPoints: [], fcstTrack: [], obsTrack: [], cone: [], watches: [] };
+let hurLayer, hurProbLayer;
+
+function hurQuery(layerId, { simplify = false, where = '1=1' } = {}) {
+  const params = new URLSearchParams({ where, outFields: '*', f: 'geojson' });
+  if (simplify) { params.set('maxAllowableOffset', '0.02'); params.set('geometryPrecision', '3'); }
+  return fetch(`${HUR_BASE}/${layerId}/query?${params}`, { signal: AbortSignal.timeout(20000) })
+    .then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
+    .then(payload => { if (payload.error) throw new Error(payload.error.message); return payload.features || []; });
+}
+
+/* ── Antimeridian ─────────────────────────────────────────────────
+   A West Pacific track running 175°E → 175°W would otherwise draw a line
+   across the whole map. Any storm with coordinates on both sides of ±180°
+   is moved onto a continuous 0–360° longitude range. The map stops at 180°,
+   so the part past the line is off-screen rather than smeared across it. */
+function hurEachCoord(geometry, fn) {
+  const walk = coords => typeof coords[0] === 'number' ? fn(coords) : coords.forEach(walk);
+  if (geometry?.coordinates) walk(geometry.coordinates);
+}
+
+function hurCrossesDateline(features) {
+  let east = false, west = false;
+  for (const feature of features) hurEachCoord(feature.geometry, ([lon]) => {
+    if (lon > 90) east = true; else if (lon < -90) west = true;
+  });
+  return east && west;
+}
+
+function hurShiftEast(feature) {
+  hurEachCoord(feature.geometry, coord => { if (coord[0] < 0) coord[0] += 360; });
+}
+
+// Storm names that straddle the line, from every layer that carries a name
+function hurFixDateline(data) {
+  const byStorm = {};
+  for (const features of Object.values(data)) {
+    for (const feature of features) (byStorm[feature.properties.STORMNAME] ||= []).push(feature);
+  }
+  for (const features of Object.values(byStorm)) {
+    if (hurCrossesDateline(features)) features.forEach(hurShiftEast);
+  }
+}
+
+/* Forecast hour for each forecast point, stored as props._tau. NHC fills in
+   TAU; JTWC storms have TAU 0 on every point, so for those it is worked out
+   from VALIDTIME ("DD/HHMM" UTC) relative to the storm's first point. */
+function hurAssignForecastHours(points) {
+  const byStorm = {};
+  for (const feature of points) (byStorm[feature.properties.STORMNAME] ||= []).push(feature);
+  for (const features of Object.values(byStorm)) {
+    if (features.some(f => f.properties.TAU > 0)) {
+      features.forEach(f => { f.properties._tau = f.properties.TAU; });
+      continue;
+    }
+    const adv = new Date(features[0].properties.ADVDATE || Date.now());
+    const validMs = props => {
+      const match = /^(\d{1,2})\/(\d{2})(\d{2})$/.exec(props.VALIDTIME || '');
+      if (!match) return NaN;
+      let month = adv.getUTCMonth();
+      if (+match[1] < adv.getUTCDate() - 15) month++;          // valid time rolled into next month
+      return Date.UTC(adv.getUTCFullYear(), month, +match[1], +match[2], +match[3]);
+    };
+    const times = features.map(f => validMs(f.properties));
+    const first = Math.min(...times.filter(Number.isFinite));
+    features.forEach((f, idx) => {
+      f.properties._tau = Number.isFinite(times[idx]) ? Math.round((times[idx] - first) / 3_600_000) : 0;
+    });
+  }
+}
+
+async function loadHurricanes() {
+  try {
+    const entries = await Promise.all(Object.entries(HUR_LAYER).map(async ([key, id]) =>
+      [key, await hurQuery(id, { simplify: key === 'cone' })]));
+    const data = Object.fromEntries(entries);
+    hurFixDateline(data);
+    hurAssignForecastHours(data.fcstPoints);
+    hurData = data;
+  } catch (err) {
+    console.warn('Tropical cyclone load failed:', err.message);
+    return;
+  }
+  plotHurricanes();
+  noteDataLoaded();
+}
+
+function hurTimeRow(label, ms) {
+  return ms ? `<div class="popup-row"><span>${label}</span><span>${fmtTime(new Date(ms).toISOString())}</span></div>` : '';
+}
+
+function hurPressureRow(mb) {
+  return mb > 0 && mb < 9999 ? `<div class="popup-row"><span>Pressure</span><span>${mb} mb</span></div>` : '';
+}
+
+function hurWindRows(kt, gust) {
+  const cls = hurClass(kt);
+  return `<div class="popup-row"><span>Max wind</span><span style="color:${cls.color};font-weight:600">${kt} kt (${hurKmh(kt)} km/h)</span></div>
+    ${gust > 0 && gust < 9999 ? `<div class="popup-row"><span>Gusts</span><span>${gust} kt (${hurKmh(gust)} km/h)</span></div>` : ''}
+    <div class="popup-row"><span>Class</span><span>${cls.label}</span></div>`;
+}
+
+function plotHurricanes() {
+  if (!hurLayer) return;
+  hurLayer.clearLayers();
+  const { cone, obsTrack, fcstTrack, watches, obsPoints, fcstPoints } = hurData;
+
+  // Cone first so tracks and points draw over it
+  L.geoJSON({ type: 'FeatureCollection', features: cone }, {
+    style: { color: '#d3c6aa', weight: 1.2, opacity: 0.9, fillColor: '#d3c6aa', fillOpacity: 0.07 },
+    onEachFeature: (feature, layer) => {
+      const props = feature.properties;
+      layer.bindPopup(`<div class="popup-inner">
+        <div class="popup-title">🌀 ${esc(props.STORMNAME)} — forecast cone</div>
+        <div class="popup-sub">Probable path of the centre, not the size of the storm</div>
+        <div class="popup-row"><span>Forecast period</span><span>${props.FCSTPRD} h</span></div>
+        ${props.MAX_WIND ? `<div class="popup-row"><span>Peak forecast wind</span><span>${props.MAX_WIND} kt (${hurKmh(props.MAX_WIND)} km/h)</span></div>` : ''}
+        ${props.MAX_LABEL ? `<div class="popup-row"><span>Peak at</span><span>${esc(props.MAX_LABEL)}</span></div>` : ''}
+        <div class="popup-row"><span>Source</span><span>${hurAgency(props.BASIN)} advisory ${esc(props.ADVISNUM || '')}</span></div>
+      </div>`);
+    },
+  }).addTo(hurLayer);
+
+  // Coastal watches and warnings
+  L.geoJSON({ type: 'FeatureCollection', features: watches }, {
+    style: feature => {
+      const watch = HUR_WATCH[feature.properties.TCWW] || { color: '#dbbc7f', dash: null };
+      return { color: watch.color, weight: 5, opacity: 0.95, dashArray: watch.dash, lineCap: 'butt' };
+    },
+    onEachFeature: (feature, layer) => {
+      const props = feature.properties;
+      const label = HUR_WATCH[props.TCWW]?.label || props.TCWW;
+      layer.bindPopup(`<div class="popup-inner">
+        <div class="popup-title">🌀 ${esc(props.STORMNAME)}</div>
+        <div class="popup-sub" style="color:${HUR_WATCH[props.TCWW]?.color || '#dbbc7f'}">${esc(label)}</div>
+        <div class="popup-row"><span>Source</span><span>${hurAgency(props.BASIN)} advisory ${esc(props.ADVISNUM || '')}</span></div>
+      </div>`);
+    },
+  }).addTo(hurLayer);
+
+  // Past track: solid, coloured by the storm's stage on each segment
+  L.geoJSON({ type: 'FeatureCollection', features: obsTrack }, {
+    style: feature => {
+      const { STORMTYPE: stage, SS: cat } = feature.properties;
+      const color = /hurricane|typhoon/i.test(stage || '') ? HUR_CLASSES[Math.min(6, 1 + Math.max(1, cat || 1))].color
+        : /storm/i.test(stage || '') ? HUR_CLASSES[1].color
+        : /depression/i.test(stage || '') ? HUR_CLASSES[0].color : HUR_WEAK.color;
+      return { color, weight: 2.5, opacity: 0.9 };
+    },
+    interactive: false,
+  }).addTo(hurLayer);
+
+  // Forecast track: dashed white centreline
+  L.geoJSON({ type: 'FeatureCollection', features: fcstTrack }, {
+    style: { color: '#ffffff', weight: 1.8, opacity: 0.85, dashArray: '5 5' },
+    interactive: false,
+  }).addTo(hurLayer);
+
+  // Past positions: small dots
+  for (const feature of obsPoints) {
+    const props = feature.properties;
+    const [lon, lat] = feature.geometry.coordinates;
+    const kt = props.INTENSITY || 0;
+    const cls = /disturbance|low/i.test(props.STORMTYPE || '') ? HUR_WEAK : hurClass(kt);
+    L.circleMarker([lat, lon], { radius: 3, weight: 1, color: '#1e2326', fillColor: cls.color, fillOpacity: 1 })
+      .bindPopup(`<div class="popup-inner">
+        <div class="popup-title">🌀 ${esc(props.STORMNAME)} — past position</div>
+        <div class="popup-sub">${esc((props.STORMTYPE || '').replace(/\d+$/, ''))}</div>
+        ${hurTimeRow('Time', props.DTG)}
+        ${kt ? hurWindRows(kt, 0) : ''}
+        ${hurPressureRow(props.MSLP)}
+      </div>`)
+      .addTo(hurLayer);
+  }
+
+  // Forecast positions: larger dots with the class letter/number
+  for (const feature of fcstPoints) {
+    const props = feature.properties;
+    const [lon, lat] = feature.geometry.coordinates;
+    const post = /post/i.test(props.STORMSRC || '') || !props.MAXWIND;
+    const cls  = post ? HUR_WEAK : hurClass(props.MAXWIND);
+    const now  = props._tau === 0;
+    const icon = L.divIcon({
+      className: 'leaflet-marker-emoji',
+      html: `<div class="hur-point${now ? ' hur-point-now' : ''}" style="background:${cls.color}">${cls.short}</div>`,
+      iconSize: now ? [22, 22] : [16, 16],
+      iconAnchor: now ? [11, 11] : [8, 8],
+      popupAnchor: [0, -10],
+    });
+    const motion = props.TCDIR > 0 && props.TCDIR < 9999
+      ? `<div class="popup-row"><span>Moving</span><span>${compassPoint(props.TCDIR)} at ${props.TCSPD} kt</span></div>` : '';
+    L.marker([lat, lon], { icon, zIndexOffset: now ? 500 : 400 })
+      .bindPopup(`<div class="popup-inner">
+        <div class="popup-title">🌀 ${esc(props.STORMNAME)}${now ? '' : ` — +${props._tau} h`}</div>
+        <div class="popup-sub" style="color:${cls.color}">${esc(props.TCDVLP || cls.label)} · ${esc(props.FLDATELBL || props.DATELBL || '')}</div>
+        ${props.MAXWIND ? hurWindRows(props.MAXWIND, props.GUST) : ''}
+        ${hurPressureRow(props.MSLP)}
+        ${motion}
+        <div class="popup-row"><span>Source</span><span>${hurAgency(props.BASIN)} advisory ${esc(props.ADVISNUM || '')}</span></div>
+      </div>`)
+      .addTo(hurLayer);
+  }
+}
+
+/* ── Wind speed probabilities (5-day) ─────────────────────────────
+   Drawn as outlines at 10/50/90% rather than filled bands, so they stay
+   readable over SST, radar and other filled layers. Each band is a ring;
+   its outer edge is the contour for that threshold. */
+async function loadHurricaneProbs() {
+  if (!hurProbLayer || !document.getElementById('toggle-hurprob')?.checked) return;
+  const kt = document.getElementById('hurprob-kt')?.value || '34';
+  let features;
+  try {
+    features = await hurQuery(HUR_PROB_LAYER[kt], { simplify: true, where: `PWIND120 IN (${HUR_PROB_LEVELS.join(',')})` });
+  } catch (err) {
+    console.warn('Wind probability load failed:', err.message);
+    return;
+  }
+  // Probability features carry no storm name, so each is checked on its own
+  for (const feature of features) if (hurCrossesDateline([feature])) hurShiftEast(feature);
+
+  hurProbLayer.clearLayers();
+  const weight = { 10: 1, 50: 1.6, 90: 2.4 };
+  for (const feature of features) {
+    const pct   = feature.properties.PWIND120;
+    const polys = feature.geometry.type === 'MultiPolygon' ? feature.geometry.coordinates : [feature.geometry.coordinates];
+    for (const [outer] of polys) {
+      const latlngs = outer.map(([lon, lat]) => [lat, lon]);
+      const line = L.polyline(latlngs, {
+        color: '#e0b0f0', weight: weight[pct] || 1, opacity: 0.95,
+        dashArray: pct === 10 ? '2 4' : null,
+      }).bindTooltip(`${pct}% chance of ${kt} kt+ winds within 5 days`, { sticky: true });
+      line.addTo(hurProbLayer);
+      // Permanent label at the northernmost point of each contour
+      const top = latlngs.reduce((best, pt) => pt[0] > best[0] ? pt : best, latlngs[0]);
+      L.tooltip({ permanent: true, direction: 'center', className: 'hur-prob-label', interactive: false })
+        .setLatLng(top).setContent(`${pct}%`).addTo(hurProbLayer);
+    }
+  }
+  noteDataLoaded();
+}
+
+// Fly to a storm's current position (GDACS cyclone popups link here)
+function flyToHurricane(name) {
+  ensureLayerOn('hur');
+  const key   = String(name).toLowerCase();
+  const point = hurData.fcstPoints.find(f => f.properties.STORMNAME?.toLowerCase() === key && f.properties._tau === 0)
+             || hurData.obsPoints.filter(f => f.properties.STORMNAME?.toLowerCase() === key).at(-1);
+  const cone  = hurData.cone.find(f => f.properties.STORMNAME?.toLowerCase() === key);
+  if (!map || (!point && !cone)) return;
+  if (cone) map.flyToBounds(L.geoJSON(cone).getBounds(), { padding: [30, 30], maxZoom: 6, duration: 1 });
+  else      map.flyTo([point.geometry.coordinates[1], point.geometry.coordinates[0]], 5, { duration: 1 });
 }
 
 /* ══════════════════════════════════════════════════════
@@ -3000,20 +3368,43 @@ function parseMeteoPolygon(polygon) {
   return rings.length ? rings : null;
 }
 
-async function loadMeteoalarm() {
-  meteoalarmData = [];
+// Set once the worker turns out not to have the /meteoalarm route (an older deploy)
+let meteoBundleUnsupported = false;
+
+/* One feed object (or null) per METEOALARM_COUNTRIES entry. The worker's
+   /meteoalarm route bundles every country into one request; if it is missing
+   or the bundle fails, fall back to one proxied request per country. */
+async function fetchMeteoalarmFeeds() {
+  if (PROXY_BASE && !meteoBundleUnsupported) {
+    try {
+      const response = await fetch(`${PROXY_BASE}/meteoalarm?countries=${METEOALARM_COUNTRIES.join(',')}`,
+                                   { signal: AbortSignal.timeout(30000) });
+      if (response.ok) {
+        const bundle = await response.json();
+        return METEOALARM_COUNTRIES.map(country => bundle[country] ?? null);
+      }
+      if (response.status === 400 || response.status === 404) meteoBundleUnsupported = true;
+    } catch (err) {
+      console.warn('Meteoalarm bundle failed, fetching per country:', err.message);
+    }
+  }
   const BASE = 'https://feeds.meteoalarm.org/api/v1/warnings/feeds-';
-  const results = await Promise.allSettled(
+  return Promise.all(
     METEOALARM_COUNTRIES.map(country =>
       fetch(proxyUrl(BASE + country), { signal: AbortSignal.timeout(15000) })
         .then(response => response.ok ? response.json() : null)
         .catch(() => null)
     )
   );
-  results.forEach((result, index) => {
-    if (result.status !== 'fulfilled' || !result.value?.warnings) return;
+}
+
+async function loadMeteoalarm() {
+  meteoalarmData = [];
+  const feeds = await fetchMeteoalarmFeeds();
+  feeds.forEach((feed, index) => {
+    if (!feed?.warnings) return;
     const country = METEOALARM_COUNTRIES[index];
-    result.value.warnings.forEach(warning => {
+    feed.warnings.forEach(warning => {
       // API wraps CAP data under warning.alert; fall back to flat structure for older feeds
       const alertObj = warning.alert || warning;
       const info = meteoInfoEN(alertObj.info);
@@ -4230,6 +4621,7 @@ function refreshAll() {
   loadVolcanism();
   loadMSCPanel();
   loadGDACS();
+  loadHurricanes();
   loadMeteoalarm();
   loadWMO();
   loadRainviewer();
@@ -4262,13 +4654,31 @@ setInterval(loadFireWx,     1800_000);  // SPC fire weather outlook — updates 
 setInterval(loadGauges,       300_000);  // NWPS river gauges — 5 min refresh
 setInterval(loadVolcanism,    600_000);  // VHP + GeoNet — 10 min (data changes slowly)
 setInterval(loadMSCPanel,     300_000);  // Canada MSC alerts — 5 min refresh
-setInterval(loadGDACS,        600_000);  // GDACS global disasters — 10 min refresh
-setInterval(loadMeteoalarm,   600_000);  // Meteoalarm Europe — 10 min refresh
-setInterval(loadWMO,          600_000);  // WMO SWIC global alerts — 10 min refresh
-setInterval(loadWind,         600_000);  // Surface wind barbs — 10 min (no-ops while layer is off)
+setInterval(loadHurricanes,   600_000);  // Tropical cyclones — advisories every 3–6 h, feed cached 5 min
+setInterval(loadHurricaneProbs, 600_000);  // Wind probabilities — no-ops while the layer is off
+setInterval(() => loadWind(true), 600_000);  // Wind stations — 10 min (no-ops while layer is off)
 setInterval(refreshGibsDailyLayers, 3600_000);  // re-point daily GIBS layers after a UTC date rollover
 setInterval(loadRainviewer,   300_000);  // RainViewer refreshes frames ~every 5 min
 setInterval(() => { buildGlobalSummary(); }, 60_000);   // Re-evaluate 1-hour window every minute
+
+/* Loaders that go through the CORS worker share its daily request quota, so
+   they pause while the tab is hidden. A refresh skipped in the background runs
+   as soon as the tab is shown again, and the interval restarts from there. */
+function refreshWhileVisible(loader, ms) {
+  let timer, missed = false;
+  const tick = () => { if (document.hidden) missed = true; else loader(); };
+  const schedule = () => { clearInterval(timer); timer = setInterval(tick, ms); };
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !missed) return;
+    missed = false;
+    loader();
+    schedule();
+  });
+  schedule();
+}
+refreshWhileVisible(loadGDACS,      600_000);  // GDACS global disasters — 10 min refresh
+refreshWhileVisible(loadMeteoalarm, 600_000);  // Meteoalarm Europe — 10 min refresh
+refreshWhileVisible(loadWMO,        600_000);  // WMO SWIC global alerts — 10 min refresh
 
 // Live indicator: re-evaluate on a timer so it goes stale on its own, and
 // react immediately to the browser's own connectivity events.
@@ -4277,10 +4687,19 @@ addEventListener('online',  refreshLiveIndicator);
 addEventListener('offline', refreshLiveIndicator);
 refreshLiveIndicator();
 
-// Re-sample wind whenever the view settles somewhere new (debounced so a drag
-// or a pinch-zoom fires one request, not one per animation frame)
+// Re-thin wind stations when the view settles: local only, no network.
+// Re-thinning rebuilds every marker, which would close an open station popup
+// (including when the popup's own auto-pan moves the map), so it waits until
+// that popup is closed.
+const _windPopupOpen = () => map._popup?.isOpen() && windLayer.hasLayer(map._popup._source);
 map.on('moveend', () => {
-  if (!document.getElementById('toggle-wind')?.checked) return;
+  if (!document.getElementById('toggle-wind')?.checked || _windPopupOpen()) return;
   clearTimeout(_windDebounce);
-  _windDebounce = setTimeout(loadWind, 600);
+  _windDebounce = setTimeout(plotWind, 150);
+});
+map.on('popupclose', event => {
+  if (windLayer.hasLayer(event.popup._source) && document.getElementById('toggle-wind')?.checked) {
+    clearTimeout(_windDebounce);
+    _windDebounce = setTimeout(plotWind, 150);
+  }
 });

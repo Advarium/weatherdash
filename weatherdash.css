@@ -1262,6 +1262,50 @@
     }
 
     .layer-toggle input { cursor: pointer; accent-color: var(--accent); }
+
+    /* Toggle with an inline picker beside it (TC wind probability threshold) */
+    .layer-toggle-row { display: flex; align-items: center; gap: 6px; }
+    .layer-toggle-row .layer-toggle { width: auto; flex: 1; }
+    .layer-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-size: 10px;
+    }
+
+    /* Tropical cyclone forecast positions: class letter/number in a dot */
+    .hur-point {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      border: 1.5px solid #1e2326;
+      box-sizing: border-box;
+      display: flex; align-items: center; justify-content: center;
+      font: 800 8px/1 system-ui, sans-serif;
+      color: #1e2326;
+    }
+    .hur-point-now {
+      width: 22px; height: 22px;
+      font-size: 10px;
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.85);
+    }
+    /* Legend copy of the marker sits inline with the text */
+    .mls-point { flex-shrink: 0; transform: scale(0.8); margin: -3px -2px 0; }
+
+    /* Wind probability contour labels */
+    .leaflet-tooltip.hur-prob-label {
+      background: rgba(30,35,38,0.8);
+      border: none;
+      box-shadow: none;
+      color: #e0b0f0;
+      font: 700 9.5px/1 system-ui, sans-serif;
+      padding: 2px 4px;
+    }
+    .leaflet-tooltip.hur-prob-label::before { display: none; }
+
+    /* Line sample in legend rows (tracks, watches, contours) */
+    .mls-line { width: 18px; height: 0; flex-shrink: 0; margin-top: 7px; }
     .layer-toggle:hover { color: var(--text); }
 
     .layer-dot {

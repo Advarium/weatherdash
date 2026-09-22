@@ -221,6 +221,24 @@
               <span class="layer-dot" style="background:#83c092;border-radius:2px"></span>
               Surface Wind
             </label>
+            <label class="layer-toggle">
+              <input type="checkbox" id="toggle-hur" onchange="toggleLayer('hur')">
+              <span class="layer-dot" style="background:#e69875"></span>
+              Tropical Cyclones
+            </label>
+            <!-- The threshold picker sits outside the label so using it doesn't toggle the layer -->
+            <div class="layer-toggle-row">
+              <label class="layer-toggle">
+                <input type="checkbox" id="toggle-hurprob" onchange="toggleLayer('hurprob')">
+                <span class="layer-dot" style="background:transparent;border:1.5px solid #e0b0f0"></span>
+                TC Wind Probabilities
+              </label>
+              <select id="hurprob-kt" class="layer-select" onchange="loadHurricaneProbs()" title="Wind speed threshold">
+                <option value="34" selected>34 kt</option>
+                <option value="50">50 kt</option>
+                <option value="64">64 kt</option>
+              </select>
+            </div>
           </div>
         </details>
 
@@ -473,6 +491,37 @@
             <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e67e80;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></span> Red Alert — Major humanitarian impact expected</div>
             <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e69875;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></span> Orange Alert — Significant impact expected</div>
             <div class="mls-swatch-row"><span class="mls-swatch" style="background:#a7c080;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></span> Green Alert — Limited impact</div>
+          </div>
+        </details>
+
+        <!-- Tropical Cyclones -->
+        <details class="mls-section">
+          <summary><span>Tropical Cyclones</span><span class="mls-chevron">▾</span></summary>
+          <div class="mls-content">
+            <div class="mls-desc">Hurricanes, typhoons and cyclones worldwide: NHC for the Atlantic and eastern/central Pacific, JTWC elsewhere, via Esri Living Atlas. Advisories every 3–6 hours. Class is worked out from sustained wind (Saffir-Simpson).</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#7fbbb3"></span> TD — Tropical Depression (&lt; 34 kt)</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#a7c080"></span> TS — Tropical Storm (34–63 kt)</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#dbbc7f"></span> 1 — Category 1 (64–82 kt)</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e69875"></span> 2 — Category 2 (83–95 kt)</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e67e80"></span> 3 — Category 3 (96–112 kt)</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#d699b6"></span> 4 — Category 4 (113–136 kt)</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#ff79c6"></span> 5 — Category 5 (137+ kt)</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#859289"></span> L — Post-tropical / low</div>
+            <div class="mls-sub">Track and cone</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #e69875"></span> Past track, coloured by stage</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2px dashed #fff"></span> Forecast track</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:rgba(211,198,170,.25);outline:1px solid #d3c6aa"></span> Forecast cone: probable path of the centre, not storm size</div>
+            <div class="mls-swatch-row"><span class="hur-point hur-point-now mls-point" style="background:#e69875">2</span> Current position (larger)</div>
+            <div class="mls-sub">Coastal watches and warnings</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px dashed #dbbc7f"></span> Tropical Storm Watch</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px solid #e69875"></span> Tropical Storm Warning</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px dashed #d699b6"></span> Hurricane Watch</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px solid #e67e80"></span> Hurricane Warning</div>
+            <div class="mls-sub">TC Wind Probabilities (separate toggle)</div>
+            <div class="mls-desc">Chance of winds at or above the chosen speed (34, 50 or 64 kt) at any point within the next 5 days. Drawn as outlines so they stay readable over filled layers.</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:1px dotted #e0b0f0"></span> 10%</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:1.6px solid #e0b0f0"></span> 50%</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.4px solid #e0b0f0"></span> 90%</div>
           </div>
         </details>
 
@@ -803,9 +852,9 @@
         <details class="mls-section">
           <summary><span>Surface Wind</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">Standard meteorological wind barbs at 10 m above ground, sampled on a grid across the current view and re-sampled when you pan or zoom. Analysis winds via Open-Meteo. Click any barb for speed, gusts, and direction.</div>
+            <div class="mls-desc">Observed wind from ~5,600 airport weather stations (METAR) and ~900 ocean buoys (NDBC) worldwide, via Esri Living Atlas; reports older than 3 hours are hidden. One barb per area of the map: the station nearest its centre. Zoom in to see more stations, or search a station code (e.g. KLNK). Click a barb for temperature, dew point, pressure, visibility and sky; buoys add waves and water temperature.</div>
             <div class="mls-sub">Reading a barb</div>
-            <div class="mls-note">The staff points <b>into</b> the wind (the direction it is blowing from). Half barb = 5 kt · full barb = 10 kt · solid pennant = 50 kt · open circle = calm.</div>
+            <div class="mls-note">The staff points <b>into</b> the wind (the direction it is blowing from). Half barb = 5 kt · full barb = 10 kt · solid pennant = 50 kt · open circle = calm, or variable with no set direction.</div>
             <div class="mls-sub">Speed (knots)</div>
             <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#a7c080"></span> Light — under 11 kt</div>
             <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#dbbc7f"></span> Moderate — 11–21 kt</div>
