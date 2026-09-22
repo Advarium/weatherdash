@@ -48,7 +48,7 @@ Most sources serve CORS headers directly. Three do not (Meteoalarm, WMO SWIC, GD
 
 The worker accepts only `GET`/`HEAD` with a `?url=` parameter, allows only HTTPS targets whose hostname is on a fixed allowlist, forwards no cookies or credentials and strips them from responses, and adds CORS headers and a 20-second upstream timeout.
 
-It also has a `/meteoalarm?countries=…` route that fetches every Meteoalarm country feed in one invocation and returns them as a single JSON object, so a Meteoalarm refresh costs one worker request instead of 39. Deploy the updated worker to use it. Against an older worker the dashboard falls back to per-country requests.
+It also has a `/meteoalarm?countries=…` route that fetches every Meteoalarm country feed in one invocation and returns them as a single JSON object, so a Meteoalarm refresh costs one worker request.
 
 Proxied sources (Meteoalarm, WMO, GDACS) refresh every 10 minutes but pause while the tab is hidden, and catch up as soon as it is shown again. A visible tab uses about 24 worker requests an hour.
 
