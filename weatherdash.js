@@ -2222,6 +2222,8 @@ async function loadWind(force = false) {
       const kmh   = props.WIND_SPEED;
       if (typeof kmh !== 'number' || kmh < 0 || kmh > WIND_MAX_KMH) return [];
       if (!props.OBS_DATETIME || now - props.OBS_DATETIME > WIND_MAX_AGE_MS) return [];
+      // The feed occasionally includes a station with no location
+      if (!Array.isArray(feature.geometry?.coordinates)) return [];
       const [lon, lat] = feature.geometry.coordinates;
       const dir = typeof props.WIND_DIRECT === 'number' ? props.WIND_DIRECT % 360 : null;
       return [{ lat, lon, knots: kmhToKt(kmh), dir, props, kind }];
@@ -3033,7 +3035,8 @@ function hurQuery(layerId, { simplify = false, where = '1=1' } = {}) {
   if (simplify) { params.set('maxAllowableOffset', '0.02'); params.set('geometryPrecision', '3'); }
   return fetch(`${HUR_BASE}/${layerId}/query?${params}`, { signal: AbortSignal.timeout(20000) })
     .then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
-    .then(payload => { if (payload.error) throw new Error(payload.error.message); return payload.features || []; });
+    .then(payload => { if (payload.error) throw new Error(payload.error.message); return payload.features || []; })
+    .then(features => features.filter(feature => feature.geometry?.coordinates));   // skip records with no location
 }
 
 /* ── Antimeridian ─────────────────────────────────────────────────
