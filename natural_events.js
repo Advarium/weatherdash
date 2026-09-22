@@ -232,12 +232,16 @@ function toggleSatellite() {
   _satActive = !_satActive;
   if (_satActive) {
     map.removeLayer(baseDark);
+    map.removeLayer(baseDarkLabels);
     baseSat.addTo(map);
     baseSat.bringToBack();
+    baseSatLabels.addTo(map);
   } else {
     map.removeLayer(baseSat);
+    map.removeLayer(baseSatLabels);
     baseDark.addTo(map);
     baseDark.bringToBack();
+    baseDarkLabels.addTo(map);
   }
   const btn = document.getElementById('sat-toggle');
   if (btn) btn.classList.toggle('active', _satActive);
@@ -255,7 +259,7 @@ function toggleGeoSection(name, headerEl) {
    MAP  —  Leaflet + Esri basemaps + overlay layers
 ══════════════════════════════════════════════════════ */
 
-let map, baseDark, baseSat, eqLayer, easLayer, eonetLayer, droughtLayer, lsrLayer, gaugeLayer, volcLayer, gdacsLayer, meteoalarmLayer, wmoLayer, spcD1Layer, spcD2Layer, spcD3Layer, fwxD1Layer, fwxD2Layer, mscLayer, radarLayer, rainviewerLayer, imergLayer, goesWLayer, goesELayer, meteosatLayer, himawariLayer, graceLayer, smapRootLayer, smapSurfLayer, dwdRadarLayer, fmiRadarLayer, sstLayer, seaIceLayer, windLayer, ozoneLayer, so2Layer;
+let map, baseDark, baseSat, baseDarkLabels, baseSatLabels, eqLayer, easLayer, eonetLayer, droughtLayer, lsrLayer, gaugeLayer, volcLayer, gdacsLayer, meteoalarmLayer, wmoLayer, spcD1Layer, spcD2Layer, spcD3Layer, fwxD1Layer, fwxD2Layer, mscLayer, radarLayer, rainviewerLayer, imergLayer, goesWLayer, goesELayer, meteosatLayer, himawariLayer, graceLayer, smapRootLayer, smapSurfLayer, dwdRadarLayer, fmiRadarLayer, sstLayer, seaIceLayer, windLayer, ozoneLayer, so2Layer;
 
 // Daily swath composites are assembled orbit-by-orbit as data downlinks, so a
 // day stays incomplete for a while after it ends. Measured tile coverage at z3:
@@ -316,7 +320,22 @@ function initMap() {
     attribution: 'Tiles &copy; <a href="https://www.esri.com/" target="_blank">Esri</a> &mdash; Source: Esri, Maxar, Earthstar Geographics',
     maxZoom: 19
   });
+
+  // Both basemaps are label-free; Esri publishes the place names as separate
+  // transparent reference layers. Their pane sits above alert polygons (400) and
+  // raster overlays, below markers (600), and ignores the mouse so clicks still
+  // reach the shapes underneath.
+  map.createPane('labels');
+  map.getPane('labels').style.zIndex = 450;
+  map.getPane('labels').style.pointerEvents = 'none';
+  baseDarkLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+    pane: 'labels', maxZoom: 19
+  });
+  baseSatLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+    pane: 'labels', maxZoom: 19
+  });
   baseDark.addTo(map);
+  baseDarkLabels.addTo(map);
 
   // Zoom control — bottom right
   L.control.zoom({ position: 'bottomright' }).addTo(map);
