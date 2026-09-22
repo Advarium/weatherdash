@@ -89,6 +89,206 @@ function esc(value) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+/* ══════════════════════════════════════════════════════
+   MAP SYMBOLOGY — shared rules so overlays stay readable together
+   • Alert layers (NWS, WMO, Meteoalarm, Canada) share one severity colour
+     scale; the line style carries the product type (warning solid, watch
+     dashed, advisory and statement dotted).
+   • Area layers are "cased": a wider dark line sits under the coloured one,
+     so the edge reads over radar, satellite and other rasters.
+   • While a colour-field raster is on (radar, SST, soil moisture…), area
+     fills switch off through a class on the map container, leaving only the
+     cased outlines. Nothing is replotted.
+══════════════════════════════════════════════════════ */
+
+const MAP_CASING = '#141a1d';
+const ALERT_DASH = { warning: null, watch: '9 6', advisory: '2 5', statement: '1 6' };
+
+// Product type from an alert's event name ("Flood Warning", "Winter Storm Watch"…)
+function alertProductType(eventName = '') {
+  const name = eventName.toLowerCase();
+  if (name.includes('warning'))   return 'warning';
+  if (name.includes('watch'))     return 'watch';
+  if (name.includes('advisory'))  return 'advisory';
+  return 'statement';
+}
+
+/* L.geoJSON drawn twice inside one feature group: a non-interactive dark
+   casing, then the styled layer. Styles may set `casing` (edge colour) and
+   `className` (e.g. 'spc-fill'); every styled path also gets 'area-fill',
+   unless the style sets `field: true` (a vector layer that is itself a colour
+   field, like drought, and keeps its fill). */
+function casedGeoJSON(data, options) {
+  const styleOf = typeof options.style === 'function' ? options.style : () => options.style;
+  const group = L.featureGroup();
+  L.geoJSON(data, {
+    interactive: false,
+    style: feature => {
+      const style = styleOf(feature);
+      return {
+        color: style.casing || MAP_CASING, weight: (style.weight || 1.5) + 2.5,
+        opacity: Math.min(1, (style.opacity ?? 0.9) + 0.05), fill: false,
+        dashArray: null, lineJoin: 'round', className: 'map-casing',
+      };
+    },
+  }).addTo(group);
+  L.geoJSON(data, {
+    ...options,
+    style: feature => {
+      const style = styleOf(feature);
+      return { ...style, className: `${style.field ? '' : 'area-fill'} ${style.className || ''}`.trim() };
+    },
+  }).addTo(group);
+  return group;
+}
+
+// L.polygon version of casedGeoJSON, for layers built from lat/lng rings
+function casedPolygon(latlngs, style) {
+  return L.featureGroup([
+    L.polygon(latlngs, { color: style.casing || MAP_CASING, weight: (style.weight || 1.5) + 2.5,
+                         opacity: 0.95, fill: false, interactive: false, className: 'map-casing' }),
+    L.polygon(latlngs, { ...style, className: `area-fill ${style.className || ''}`.trim() }),
+  ]);
+}
+
+// Alert with no shape, only a location: a small outlined badge with "!",
+// kept distinct from event circles (earthquakes) and diamonds (GDACS)
+function alertBadgeIcon(color) {
+  return L.divIcon({
+    className: 'leaflet-marker-emoji',
+    html: `<div class="alert-badge-pin" style="border-color:${color};color:${color}">!</div>`,
+    iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -9],
+  });
+}
+
+// Every descendant layer of a group (cased layers nest groups inside groups)
+function eachLeafLayer(root, visit) {
+  root.eachLayer(layer => (layer.eachLayer ? eachLeafLayer(layer, visit) : visit(layer)));
+}
+
+// Rasters that paint a continuous colour field. While any is on, area fills turn off.
+// Drought is vector data but reads as a field: its nested classes turn into a
+// tangle of outlines if stripped, so it takes part in the one-field rule instead.
+const COLOUR_FIELDS = ['radar', 'rainviewer', 'dwd-radar', 'fmi-radar', 'imerg', 'sst', 'seaice', 'grace', 'smap-root', 'smap-surf', 'ozone', 'drought', 'airmass', 'geocolor'];
+
+/* Infrared satellites have two styles. "Clouds only" (recoloured, clear ground
+   transparent) sits under anything. "Enhanced" is NASA's/EUMETSAT's original
+   colour table: more detail in cold cloud tops, but a full colour field, so it
+   follows the one-field rule. The four satellites cover different regions and
+   can always be on together. */
+const IR_KEYS = ['goesw', 'goese', 'himawari', 'meteosat'];
+let irStyle = 'clouds';
+const isColourField = key => COLOUR_FIELDS.includes(key) || (irStyle === 'enhanced' && IR_KEYS.includes(key));
+const fieldKeys = () => [...COLOUR_FIELDS, ...(irStyle === 'enhanced' ? IR_KEYS : [])];
+
+/* One colour field at a time: two filled colour ramps on top of each other
+   can't be read. Layers in the same set here can share the map because they
+   don't overlap or were designed to stack (regional radars; ice over SST). */
+const FIELD_COMPATIBLE = [['radar', 'dwd-radar', 'fmi-radar'], ['sst', 'seaice'], IR_KEYS];
+const LAYER_NAMES = key => document.querySelector(`#toggle-${key} ~ .layer-name`)?.textContent || key;
+
+function enforceSingleField(turnedOn, label = LAYER_NAMES(turnedOn)) {
+  if (!isColourField(turnedOn)) return;
+  const allowed = FIELD_COMPATIBLE.find(set => set.includes(turnedOn)) || [turnedOn];
+  const replaced = fieldKeys().filter(key => !allowed.includes(key) && document.getElementById(`toggle-${key}`)?.checked);
+  for (const key of replaced) {
+    document.getElementById(`toggle-${key}`).checked = false;
+    toggleLayer(key);
+  }
+  if (replaced.length) {
+    showMapToast(`Showing ${label}. Turned off ${replaced.map(LAYER_NAMES).join(', ')}: one colour layer shows at a time.`);
+  }
+}
+
+let _toastTimer;
+function showMapToast(text) {
+  if (!map) return;
+  let toast = document.getElementById('map-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'map-toast';
+    toast.className = 'map-toast';
+    toast.setAttribute('role', 'status');
+    map.getContainer().appendChild(toast);
+  }
+  toast.textContent = text;
+  toast.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => toast.classList.remove('show'), 4500);
+}
+
+/* ── Scenes: tested layer combinations for common tasks ────────────
+   Each was checked on the map for readability. A scene only sets layers;
+   it doesn't move the map. Changing any layer afterwards makes it "custom". */
+const SCENES = {
+  severe:   ['eas', 'radar', 'spc-d1', 'lsr', 'wind'],
+  tropical: ['hur', 'hurprob', 'goesw', 'goese', 'himawari', 'wind'],
+  winter:   ['eas', 'rainviewer', 'wind'],
+  fire:     ['fwx-d1', 'drought', 'eonet', 'wind'],
+  flood:    ['eas', 'gauge', 'radar'],
+  geo:      ['eq', 'volc', 'gdacs', 'eonet', 'so2'],
+  ocean:    ['sst', 'seaice', 'hur', 'wind'],
+  europe:   ['meteoalarm', 'dwd-radar', 'fmi-radar', 'wind'],
+};
+let _applyingScene = false;
+
+function applyScene(name) {
+  const keys = name ? SCENES[name] : [];
+  _applyingScene = true;
+  document.querySelectorAll('input[id^="toggle-"]').forEach(checkbox => {
+    const key = checkbox.id.slice('toggle-'.length);
+    const want = keys.includes(key);
+    if (checkbox.checked !== want) { checkbox.checked = want; toggleLayer(key); }
+  });
+  _applyingScene = false;
+  markScene(name);
+}
+
+function markScene(name) {
+  document.querySelectorAll('.scene-btn[data-scene]').forEach(button => {
+    const on = button.dataset.scene === name;
+    button.classList.toggle('active', on);
+    button.setAttribute('aria-pressed', String(on));
+  });
+}
+
+// The IR layer to show for a satellite in the current style
+function irLayerFor(key, style = irStyle) {
+  const layers = {
+    goesw:    [goesWLayer, goesWEnhLayer],   goese:    [goesELayer, goesEEnhLayer],
+    himawari: [himawariLayer, himawariEnhLayer], meteosat: [meteosatLayer, meteosatEnhLayer],
+  }[key];
+  return layers?.[style === 'enhanced' ? 1 : 0];
+}
+
+function setIrStyle(style) {
+  irStyle = style;
+  const select = document.getElementById('ir-style');
+  if (select && select.value !== style) select.value = style;
+  // Swap every visible satellite to the chosen style
+  const visible = IR_KEYS.filter(key => document.getElementById(`toggle-${key}`)?.checked);
+  for (const key of IR_KEYS) {
+    for (const variant of ['clouds', 'enhanced']) {
+      const layer = irLayerFor(key, variant);
+      if (layer && map.hasLayer(layer) && (variant !== style || !visible.includes(key))) map.removeLayer(layer);
+    }
+    if (visible.includes(key)) map.addLayer(irLayerFor(key));
+  }
+  // Enhanced colours are a colour field: make room for them
+  if (style === 'enhanced' && visible.length) enforceSingleField(visible[0], 'enhanced infrared');
+  updateFieldState();
+}
+
+function updateFieldState() {
+  if (!map) return;
+  const on = key => document.getElementById(`toggle-${key}`)?.checked;
+  const container = map.getContainer();
+  container.classList.toggle('fields-on', fieldKeys().some(on));
+  // Several outlook days at once: outlines only, told apart by line style
+  container.classList.toggle('spc-multi', ['spc-d1', 'spc-d2', 'spc-d3'].filter(on).length > 1);
+  container.classList.toggle('fwx-multi', ['fwx-d1', 'fwx-d2'].filter(on).length > 1);
+}
+
 function relTime(ms) {
   const ageSeconds = (Date.now() - ms) / 1000;
   if (ageSeconds < 60)    return `${Math.round(ageSeconds)}s ago`;
@@ -259,7 +459,7 @@ function toggleGeoSection(name, headerEl) {
    MAP  —  Leaflet + Esri basemaps + overlay layers
 ══════════════════════════════════════════════════════ */
 
-let map, baseDark, baseSat, baseDarkLabels, baseSatLabels, eqLayer, easLayer, eonetLayer, droughtLayer, lsrLayer, gaugeLayer, volcLayer, gdacsLayer, meteoalarmLayer, wmoLayer, spcD1Layer, spcD2Layer, spcD3Layer, fwxD1Layer, fwxD2Layer, mscLayer, radarLayer, rainviewerLayer, imergLayer, goesWLayer, goesELayer, meteosatLayer, himawariLayer, graceLayer, smapRootLayer, smapSurfLayer, dwdRadarLayer, fmiRadarLayer, sstLayer, seaIceLayer, windLayer, ozoneLayer, so2Layer;
+let map, baseDark, baseSat, baseDarkLabels, baseSatLabels, goesWEnhLayer, goesEEnhLayer, himawariEnhLayer, meteosatEnhLayer, airmassLayer, geocolorLayer, eqLayer, easLayer, eonetLayer, droughtLayer, lsrLayer, gaugeLayer, volcLayer, gdacsLayer, meteoalarmLayer, wmoLayer, spcD1Layer, spcD2Layer, spcD3Layer, fwxD1Layer, fwxD2Layer, mscLayer, radarLayer, rainviewerLayer, imergLayer, goesWLayer, goesELayer, meteosatLayer, himawariLayer, graceLayer, smapRootLayer, smapSurfLayer, dwdRadarLayer, fmiRadarLayer, sstLayer, seaIceLayer, windLayer, ozoneLayer, so2Layer;
 
 // Daily swath composites are assembled orbit-by-orbit as data downlinks, so a
 // day stays incomplete for a while after it ends. Measured tile coverage at z3:
@@ -285,6 +485,530 @@ function refreshGibsDailyLayers() {
   swap(ozoneLayer, 'OMPS_Ozone_Total_Column');
   swap(so2Layer,   'OMI_SO2_Lower_Troposphere');
 }
+
+/* ══════════════════════════════════════════════════════
+   RASTER RECOLOUR — repaint GIBS WMTS tiles with our own palettes
+   ──────────────────────────────────────────────────────
+   GIBS tiles are CORS-open (Access-Control-Allow-Origin: *), so each tile is
+   drawn to a canvas, every pixel is mapped back to its data value through the
+   product's GIBS colormap (RASTER_LUTS), and repainted from RASTER_PALETTES.
+   Rasters are meant to be quiet "ground": no yellow/orange/red/magenta in the
+   continuous fields, so the warm-coloured vector symbols stay readable.
+
+   Pieces:
+     RASTER_LUTS      colour → value tables, generated by build_luts.py
+     RASTER_PALETTES  value → RGBA stops + legend (css gradient + labels)
+     L.GridLayer.Recolor / recolorLayer(opts)
+                      the layer. Options: url, nativeMaxZoom, lut, palette,
+                      zIndex, opacity, attribution, maxZoom, plus optional
+                      tolerance, greyAmbiguity, pixelated, cacheSize.
+     rasterLegendHTML(key)  legend markup for index.html
+   Plain script, no imports; needs Leaflet (global L) only when the layer
+   class is defined, so the tables load fine without it.
+══════════════════════════════════════════════════════ */
+
+// BEGIN RASTER_LUTS (generated by build_luts.py — do not edit by hand)
+const RASTER_LUTS = {
+  // GHRSST_L4_MUR_Sea_Surface_Temperature (215 classes)
+  sst: { units: '°C', rgb: '2b001a2d001c30001f3300223500243800273b002b3f012e4201324501354801394b023d4e024151024555024958024d5b03515f035562035965035d6904616c046670056a73056e7606717806737906757a06777906777807777507757207746f07726b087067086e62086c5e08695a09675609655109634d0961490a5e450a5c410a5a3d0a58390a56350b54300b512c0b4f280b4d250c4c220d4b200e4b1e104d1e124e1e14511e16541e18571e1a5a1f1c5d1e1e601e21631f23661f25691f276c1f2a701f2c731f2e761f30791f327c1f357f1f3782203985203b88203d8b20408e20429120449420469721499b214b9e214ea12151a42254a72257aa235aad235db02460b32464b62567b9256abb266ebe2671c22775c52878c8287bcb297fce2982d12a85d42a88d72a8bda2b8edd2b92e02c95e32c98e62d9ce92e9fec2ea3ef2fa6f230aaf530acf42fadf02eaee82daede2badd029abbf27a8ab25a69823a48520a3711ea35d1ba54819a7351aaa251caf1720b30d26b7062dbb0137be0042c2004cc50057c90062cc006dcf0078d30083d7008eda0099de00a5e100b0e500bbe800c5ec00d0ef00dbf300e5f600edf700f3f700f8f500fcf300feef00ffea00ffe400ffdf00ffd900ffd400ffce00ffc900ffc400ffbf00ffb900ffb400ffaf00ffaa00ffa400ff9f00ff9900ff9400ff8e00ff8900ff8300fe7e00fd7a00fc7500fb7100fa6d00f86a00f66600f46200f25f00f05b00ee5700ec5300ea5000e84c00e64900e44500e24200e03e00de3b00dc3700da3300d83000d52d00d22a00ce2700ca2500c52200c02000bb1f00b51d00b01b00ab1900a61700a115009c14009712009110008c0e00870c00820a007c08007807007305006e03006b0200',
+    val: [-0.075,0.075,0.225,0.375,0.525,0.675,0.825,0.975,1.125,1.275,1.425,1.575,1.725,1.875,2.025,2.175,2.325,2.475,2.625,2.775,2.925,3.075,3.225,3.375,3.525,3.675,3.825,3.975,4.125,4.275,4.425,4.575,4.725,4.875,5.025,5.175,5.325,5.475,5.625,5.775,5.925,6.075,6.225,6.375,6.525,6.675,6.825,6.975,7.125,7.275,7.425,7.575,7.725,7.875,8.025,8.175,8.325,8.475,8.625,8.775,8.925,9.075,9.225,9.375,9.525,9.675,9.825,9.975,10.125,10.275,10.425,10.575,10.725,10.875,11.025,11.175,11.325,11.475,11.625,11.775,11.925,12.075,12.225,12.375,12.525,12.675,12.825,12.975,13.125,13.275,13.425,13.575,13.725,13.875,14.025,14.175,14.325,14.475,14.625,14.775,14.925,15.075,15.225,15.375,15.525,15.675,15.825,15.975,16.125,16.275,16.425,16.575,16.725,16.875,17.025,17.175,17.325,17.475,17.625,17.775,17.925,18.075,18.225,18.375,18.525,18.675,18.825,18.975,19.125,19.275,19.425,19.575,19.725,19.875,20.025,20.175,20.325,20.475,20.625,20.775,20.925,21.075,21.225,21.375,21.525,21.675,21.825,21.975,22.125,22.275,22.425,22.575,22.725,22.875,23.025,23.175,23.325,23.475,23.625,23.775,23.925,24.075,24.225,24.375,24.525,24.675,24.825,24.975,25.125,25.275,25.425,25.575,25.725,25.875,26.025,26.175,26.325,26.475,26.625,26.775,26.925,27.075,27.225,27.375,27.525,27.675,27.825,27.975,28.125,28.275,28.425,28.575,28.725,28.875,29.025,29.175,29.325,29.475,29.625,29.775,29.925,30.075,30.225,30.375,30.525,30.675,30.825,30.975,31.125,31.275,31.425,31.575,31.725,31.9,32.075] },
+  // GHRSST_L4_MUR_Sea_Ice_Concentration (101 classes)
+  seaIce: { units: '%', rgb: '1111110e000e1c001c3200324000404e004e630063710071870087950095a300a3b800b8c600c6dc00dcea00eaf800f8f100ffe300ffcd00ffbf00ffb100ff9c00ff8e00ff7f00ff6a00ff5c00ff4700ff3900ff2a00ff1500ff0700ff0010ff0021ff0031ff004aff005aff0073ff0084ff0094ff00adff00bdff00ceff00e6ff00f7ff00faf100f6e300f1d400eabf00e5b100de9c00d98e00d47f00cd6a00c95c00c24700bd3900b82a00b11500ac070faf001eb4002db90044c10053c60062cb0078d20087d7009edf00ade400bce900d2f000e1f500f8fd00fff800ffea00ffd400ffc600ffb100ffa300ff9500ff7f00ff7100ff6300ff4e00ff4000ff2a00ff1c00ff0e00ff0909ff1a1aff3333ff4444ff5555ff6f6fff8080ff9999ffaaaaffbbbbffd5d5ffe6e6ffffff',
+    val: [0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5,24.5,25.5,26.5,27.5,28.5,29.5,30.5,31.5,32.5,33.5,34.5,35.5,36.5,37.5,38.5,39.5,40.5,41.5,42.5,43.5,44.5,45.5,46.5,47.5,48.5,49.5,50.5,51.5,52.5,53.5,54.5,55.5,56.5,57.5,58.5,59.5,60.5,61.5,62.5,63.5,64.5,65.5,66.5,67.5,68.5,69.5,70.5,71.5,72.5,73.5,74.5,75.5,76.5,77.5,78.5,79.5,80.5,81.5,82.5,83.5,84.5,85.5,86.5,87.5,88.5,89.5,90.5,91.5,92.5,93.5,94.5,95.5,96.5,97.5,98.5,99.5,100] },
+  // GOES-West_ABI_Band13_Clean_Infrared (238 classes)
+  ir: { units: '°C', rgb: 'ffffff7f007f8c0d8799198ea52696b2339dbf40a5cc4cadd959b4e566bcf272c3ff7fcbe6e6e6ccccccb1b1b19b9b9b8181816666664c4c4c3636361b1b1b0505051a00003300004d0000660000800000990000b30000cc0000e60000ff0000ff1a00ff3300ff4d00ff6600ff8000ff9900ffb300ffcc00ffe600ffff00e6ff00ccff00b3ff0099ff0080ff0066ff004dff0033ff001aff0000ff0000ea0a00d41300bf1d00aa2600953000803a006a4300554d004056002a6000156900007300007d000d7a001a8100268800338f004096004c9d0059a40066ab0073b20080b9008cc00099c700a6ce00b2d500bfdc00cce300d9ea00e6f100f2f800ffffc5c5c5c4c4c4c2c2c2c1c1c1c0c0c0bfbfbfbdbdbdbcbcbcbbbbbbb9b9b9b8b8b8b7b7b7b5b5b5b4b4b4b3b3b3b2b2b2b0b0b0afafafaeaeaeacacacabababaaaaaaa9a9a9a7a7a7a6a6a6a5a5a5a3a3a3a2a2a2a1a1a19f9f9f9e9e9e9d9d9d9c9c9c9a9a9a9999999898989696969595959494949393939191919090908f8f8f8d8d8d8c8c8c8b8b8b8a8a8a8888888787878686868484848383838282828080807f7f7f7e7e7e7d7d7d7b7b7b7a7a7a7979797777777676767575757474747272727171717070706e6e6e6d6d6d6c6c6c6a6a6a6969696868686767676565656464646363636161616060605f5f5f5e5e5e5c5c5c5b5b5b5a5a5a5858585757575656565454545353535252525151514f4f4f4e4e4e4d4d4d4b4b4b4a4a4a4949494848484646464545454444444242424141414040403e3e3e3d3d3d3c3c3c3b3b3b3939393838383737373535353434343333333232323030302f2f2f2e2e2e2c2c2c2b2b2b2a2a2a2929292727272626262525252323232222222121211f1f1f1e1e1e1d1d1d1c1c1c1a1a1a1919191818181616161515151414141313131111111010100f0f0f0d0d0d0c0c0c0b0b0b090909080808070707060606040404030303020202010101',
+    val: [-91.6,-90.6,-89.6,-88.6,-87.6,-86.6,-85.6,-84.6,-83.6,-82.6,-81.6,-80.6,-79.6,-78.6,-77.6,-76.6,-75.6,-74.6,-73.6,-72.6,-71.6,-70.6,-69.6,-68.6,-67.6,-66.6,-65.6,-64.6,-63.6,-62.6,-61.6,-60.6,-59.6,-58.6,-57.6,-56.6,-55.6,-54.6,-53.6,-52.6,-51.6,-50.6,-49.6,-48.6,-47.6,-46.6,-45.6,-44.6,-43.6,-42.6,-41.6,-40.6,-39.6,-38.6,-37.6,-36.6,-35.6,-34.6,-33.6,-32.6,-31.6,-30.85,-30.35,-29.85,-29.35,-28.85,-28.35,-27.85,-27.35,-26.85,-26.35,-25.85,-25.35,-24.85,-24.35,-23.85,-23.35,-22.85,-22.35,-21.85,-21.35,-20.85,-20.35,-19.85,-19.35,-18.85,-18.35,-17.85,-17.35,-16.85,-16.35,-15.85,-15.35,-14.85,-14.35,-13.85,-13.35,-12.85,-12.35,-11.85,-11.35,-10.85,-10.35,-9.85,-9.35,-8.85,-8.35,-7.85,-7.35,-6.85,-6.35,-5.85,-5.35,-4.85,-4.35,-3.85,-3.35,-2.85,-2.35,-1.85,-1.35,-0.85,-0.35,0.15,0.65,1.15,1.65,2.15,2.65,3.15,3.65,4.15,4.65,5.15,5.65,6.15,6.65,7.15,7.65,8.15,8.65,9.15,9.65,10.15,10.65,11.15,11.65,12.15,12.65,13.15,13.65,14.15,14.65,15.15,15.65,16.15,16.65,17.15,17.65,18.15,18.65,19.15,19.65,20.15,20.65,21.15,21.65,22.15,22.65,23.15,23.65,24.15,24.65,25.15,25.65,26.15,26.65,27.15,27.65,28.15,28.65,29.15,29.65,30.15,30.65,31.15,31.65,32.15,32.65,33.15,33.65,34.15,34.65,35.15,35.65,36.15,36.65,37.15,37.65,38.15,38.65,39.15,39.65,40.15,40.65,41.15,41.65,42.15,42.65,43.15,43.65,44.15,44.65,45.15,45.65,46.15,46.65,47.15,47.65,48.15,48.65,49.15,49.65,50.15,50.65,51.15,51.65,52.15,52.65,53.15,53.65,54.15,54.65,55.15,55.65,56.15,56.65,57.15] },
+  // GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI (242 classes)
+  grace: { units: 'cm', rgb: '0033ff0234ff0436ff0637ff0839ff0a3aff0c3cff0e3eff1040ff1341ff1543ff1745ff1a47ff1c49ff1e4aff204cff224dff244fff2651ff2852ff2a54ff2c55ff2e57ff3059ff325bff345cff375eff3960ff3b62ff3e64ff4065ff4267ff4469ff466aff486cff4a6dff4c6fff4e71ff5072ff5274ff5475ff5677ff5879ff5a7bff5d7dff5f7fff6180ff6482ff6684ff6885ff6a87ff6c89ff6e8aff708cff728dff748fff7691ff7892ff7a94ff7c96ff7f98ff8199ff849bff869dff899fff8ba1ff8da2ff8fa4ff91a5ff93a7ff95a9ff97aaff99acff9badff9dafff9fb1ffa1b3ffa3b4ffa6b6ffa8b8ffaabaffadbcffafbdffb1bfffb3c1ffb5c2ffb7c4ffb9c5ffbbc7ffbdc9ffbfcaffc1ccffc3cdffc5cfffc7d1ffc9d3ffccd5ffced7ffd0d8ffd3daffd5dcffd7ddffd9dfffdbe1ffdde2ffdfe4ffe1e5ffe3e7ffe5e9ffe7eaffe9ecffebeeffedf0fff0f1fff2f3fff4f5fff7f7fff9f9fffafafffcfbfefdfbfefefbfdfefbfcfffafafff9f9fff7f7fff5f5fff4f2fff2f0fff0eeffeeebffece9ffeae7ffe9e5ffe7e3ffe5e1ffe4dfffe2ddffe1dbffdfd9ffddd7ffdcd5ffdad3ffd9d1ffd7ceffd5ccffd3caffd1c7ffcfc5ffcec3ffccc1ffcabfffc9bdffc7bbffc5b9ffc4b7ffc2b5ffc1b3ffbfb1ffbdafffbcadffbaabffb8a8ffb7a6ffb5a4ffb3a1ffb19fffaf9dffad9bffac99ffaa97ffa995ffa793ffa591ffa48fffa28dffa18bff9f89ff9d87ff9c84ff9a82ff987fff967dff947aff9278ff9176ff8f74ff8d72ff8c70ff8a6eff896cff876aff8568ff8466ff8264ff8162ff7f5fff7d5dff7b5bff7958ff7756ff7654ff7452ff7250ff714eff6f4cff6d4aff6c48ff6a46ff6944ff6742ff6540ff643eff623cff6039ff5f37ff5d35ff5b32ff5930ff572eff552cff542aff5228ff5126ff4f24ff4d22ff4c20ff4a1eff491cff471aff4518ff4415ff4213ff4011ff3e0eff3c0cff3a0aff3908ff3706ff3604ff3402ff3300',
+    val: [-30.125,-29.875,-29.625,-29.375,-29.125,-28.875,-28.625,-28.375,-28.125,-27.875,-27.625,-27.375,-27.125,-26.875,-26.625,-26.375,-26.125,-25.875,-25.625,-25.375,-25.125,-24.875,-24.625,-24.375,-24.125,-23.875,-23.625,-23.375,-23.125,-22.875,-22.625,-22.375,-22.125,-21.875,-21.625,-21.375,-21.125,-20.875,-20.625,-20.375,-20.125,-19.875,-19.625,-19.375,-19.125,-18.875,-18.625,-18.375,-18.125,-17.875,-17.625,-17.375,-17.125,-16.875,-16.625,-16.375,-16.125,-15.875,-15.625,-15.375,-15.125,-14.875,-14.625,-14.375,-14.125,-13.875,-13.625,-13.375,-13.125,-12.875,-12.625,-12.375,-12.125,-11.875,-11.625,-11.375,-11.125,-10.875,-10.625,-10.375,-10.125,-9.875,-9.625,-9.375,-9.125,-8.875,-8.625,-8.375,-8.125,-7.875,-7.625,-7.375,-7.125,-6.875,-6.625,-6.375,-6.125,-5.875,-5.625,-5.375,-5.125,-4.875,-4.625,-4.375,-4.125,-3.875,-3.625,-3.375,-3.125,-2.875,-2.625,-2.375,-2.125,-1.875,-1.625,-1.375,-1.125,-0.875,-0.625,-0.375,-0.125,0.125,0.375,0.625,0.875,1.125,1.375,1.625,1.875,2.125,2.375,2.625,2.875,3.125,3.375,3.625,3.875,4.125,4.375,4.625,4.875,5.125,5.375,5.625,5.875,6.125,6.375,6.625,6.875,7.125,7.375,7.625,7.875,8.125,8.375,8.625,8.875,9.125,9.375,9.625,9.875,10.125,10.375,10.625,10.875,11.125,11.375,11.625,11.875,12.125,12.375,12.625,12.875,13.125,13.375,13.625,13.875,14.125,14.375,14.625,14.875,15.125,15.375,15.625,15.875,16.125,16.375,16.625,16.875,17.125,17.375,17.625,17.875,18.125,18.375,18.625,18.875,19.125,19.375,19.625,19.875,20.125,20.375,20.625,20.875,21.125,21.375,21.625,21.875,22.125,22.375,22.625,22.875,23.125,23.375,23.625,23.875,24.125,24.375,24.625,24.875,25.125,25.375,25.625,25.875,26.125,26.375,26.625,26.875,27.125,27.375,27.625,27.875,28.125,28.375,28.625,28.875,29.125,29.375,29.625,29.875,30.125] },
+  // SMAP_L4_Analyzed_Root_Zone_Soil_Moisture (255 classes)
+  smapRoot: { units: 'm³/m³', rgb: 'ffa200ffa500ffa700ffaa00ffac00ffae00ffb100ffb300ffb500ffb800ffba00ffbd00ffbf00ffc100ffc400ffc600ffc800ffcb00ffcd00ffd000ffd200ffd400ffd700ffd900ffdb00ffde00ffe000ffe300ffe500ffe700ffea00ffec00ffee00fff100fff300fff600fff800fff900fffa00fffb00fffd00ffff00fffe00f9fc00f3f900edf600e7f300e1f000dbed00d5ea00d0e700cae400c4e100bede00b8db00b2d800acd500a6d200a0cf009acc0094c9008ec60088c30082c1007dbe0077bb0071b8006bb50065b2005faf0059ac0053a9004da60047a30041a0003b9d00359a002f97002a94002491001e8e00188b001288000c850006820000820000820600850c008813008b19008f1f00922500952c009832009b38009e3e00a14400a44b00a85100ab5700ae5d00b16400b46a00b77000ba7600bd7c00c18300c48900c78f00ca9500cd9b00d0a200d3a800d6ae00dab400ddbb00e0c100e3c700e6cd00e9d300ecda00efe000f3e600f6ec00f9f300fcf900feff00ffff00fdff00f9ff00f3ff00edff00e7ff00e1ff00dbff00d5ff00d0ff00caff00c4ff00beff00b8ff00b2ff00acff00a6ff00a0ff009aff0094ff008eff0088ff0082ff007dff0077ff0071ff006bff0065ff005fff0059ff0053ff004dff0047ff0041ff003bff0035ff002fff002aff0024ff001eff0018ff0012ff000cff0006ff0000ff0000fb0000f80000f40000f10000ed0000e90000e60000e20000df0000db0000d70000d40000d00000cd0000c90000c50000c20000be0000bb0000b70000b30000b00000ac0000a80000a50000a100009e00009a00009600009300008f00008c00008800008400008100007d00007a00007600007200006f00006b0000680000640202640404640606640808640a0a640c0c640e0e641010641212641414641616641818641a1a641c1c641e1e6420206422225a24245a26265a28285a2a2a5a2c2c5a2e2e5a30305a32325a34345a36365a38385a3a3a5a3c3c503e3e504040504242504444504646504848504a4a504c4c504e4e50505050',
+    val: [0.0015,0.0045,0.007,0.0095,0.0125,0.0155,0.018,0.0205,0.0235,0.0265,0.029,0.0315,0.0345,0.0375,0.04,0.0425,0.0455,0.0485,0.051,0.0535,0.0565,0.0595,0.062,0.0645,0.0675,0.0705,0.073,0.0755,0.0785,0.0815,0.084,0.0865,0.0895,0.0925,0.095,0.0975,0.1005,0.1035,0.106,0.1085,0.1115,0.1145,0.1175,0.12,0.1225,0.1255,0.1285,0.131,0.1335,0.1365,0.1395,0.142,0.1445,0.1475,0.1505,0.153,0.1555,0.1585,0.1615,0.164,0.1665,0.1695,0.1725,0.175,0.1775,0.1805,0.1835,0.186,0.1885,0.1915,0.1945,0.197,0.1995,0.2025,0.2055,0.208,0.2105,0.2135,0.2165,0.219,0.2215,0.2245,0.2275,0.23,0.2325,0.2355,0.2385,0.2415,0.244,0.2465,0.2495,0.2525,0.255,0.2575,0.2605,0.2635,0.266,0.2685,0.2715,0.2745,0.277,0.2795,0.2825,0.2855,0.288,0.2905,0.2935,0.2965,0.299,0.3015,0.3045,0.3075,0.31,0.3125,0.3155,0.3185,0.321,0.3235,0.3265,0.3295,0.332,0.3345,0.3375,0.3405,0.343,0.3455,0.3485,0.3515,0.3545,0.357,0.3595,0.3625,0.3655,0.368,0.3705,0.3735,0.3765,0.379,0.3815,0.3845,0.3875,0.39,0.3925,0.3955,0.3985,0.401,0.4035,0.4065,0.4095,0.412,0.4145,0.4175,0.4205,0.423,0.4255,0.4285,0.4315,0.434,0.4365,0.4395,0.4425,0.445,0.4475,0.4505,0.4535,0.456,0.4585,0.4615,0.4645,0.4675,0.47,0.4725,0.4755,0.4785,0.481,0.4835,0.4865,0.4895,0.492,0.4945,0.4975,0.5005,0.503,0.5055,0.5085,0.5115,0.514,0.5165,0.5195,0.5225,0.525,0.5275,0.5305,0.5335,0.536,0.5385,0.5415,0.5445,0.547,0.5495,0.5525,0.5555,0.558,0.5605,0.5635,0.5665,0.569,0.5715,0.5745,0.5775,0.58,0.5825,0.5855,0.5885,0.5915,0.594,0.5965,0.5995,0.6025,0.605,0.6075,0.6105,0.6135,0.616,0.6185,0.6215,0.6245,0.627,0.6295,0.6325,0.6355,0.638,0.6405,0.6435,0.6465,0.649,0.6515,0.6545,0.6575,0.66,0.6625,0.6655,0.6685,0.671,0.6735,0.6765,0.6795,0.682,0.6845,0.6875,0.6905,0.693,0.6955,0.6985,0.7015] },
+  // SMAP_L3_Passive_Day_Soil_Moisture (255 classes)
+  smapSurf: { units: 'cm³/cm³', rgb: 'ffa200ffa500ffa700ffaa00ffac00ffae00ffb100ffb300ffb500ffb800ffba00ffbd00ffbf00ffc100ffc400ffc600ffc800ffcb00ffcd00ffd000ffd200ffd400ffd700ffd900ffdb00ffde00ffe000ffe300ffe500ffe700ffea00ffec00ffee00fff100fff300fff600fff800fff900fffa00fffb00fffd00ffff00fffe00f9fc00f3f900edf600e7f300e1f000dbed00d5ea00d0e700cae400c4e100bede00b8db00b2d800acd500a6d200a0cf009acc0094c9008ec60088c30082c1007dbe0077bb0071b8006bb50065b2005faf0059ac0053a9004da60047a30041a0003b9d00359a002f97002a94002491001e8e00188b001288000c850006820000820000820600850c008813008b19008f1f00922500952c009832009b38009e3e00a14400a44b00a85100ab5700ae5d00b16400b46a00b77000ba7600bd7c00c18300c48900c78f00ca9500cd9b00d0a200d3a800d6ae00dab400ddbb00e0c100e3c700e6cd00e9d300ecda00efe000f3e600f6ec00f9f300fcf900feff00ffff00fdff00f9ff00f3ff00edff00e7ff00e1ff00dbff00d5ff00d0ff00caff00c4ff00beff00b8ff00b2ff00acff00a6ff00a0ff009aff0094ff008eff0088ff0082ff007dff0077ff0071ff006bff0065ff005fff0059ff0053ff004dff0047ff0041ff003bff0035ff002fff002aff0024ff001eff0018ff0012ff000cff0006ff0000ff0000fb0000f80000f40000f10000ed0000e90000e60000e20000df0000db0000d70000d40000d00000cd0000c90000c50000c20000be0000bb0000b70000b30000b00000ac0000a80000a50000a100009e00009a00009600009300008f00008c00008800008400008100007d00007a00007600007200006f00006b0000680000640202640404640606640808640a0a640c0c640e0e641010641212641414641616641818641a1a641c1c641e1e6420206422225a24245a26265a28285a2a2a5a2c2c5a2e2e5a30305a32325a34345a36365a38385a3a3a5a3c3c503e3e504040504242504444504646504848504a4a504c4c504e4e50505050',
+    val: [0.001,0.0035,0.006,0.008,0.0105,0.013,0.0155,0.018,0.02,0.0225,0.025,0.027,0.0295,0.032,0.034,0.0365,0.039,0.0415,0.044,0.046,0.0485,0.051,0.053,0.0555,0.058,0.06,0.0625,0.065,0.0675,0.07,0.072,0.0745,0.077,0.079,0.0815,0.084,0.086,0.0885,0.091,0.093,0.0955,0.098,0.1005,0.103,0.105,0.1075,0.11,0.112,0.1145,0.117,0.119,0.1215,0.124,0.1265,0.129,0.131,0.1335,0.136,0.138,0.1405,0.143,0.145,0.1475,0.15,0.1525,0.155,0.157,0.1595,0.162,0.164,0.1665,0.169,0.171,0.1735,0.176,0.1785,0.181,0.183,0.1855,0.188,0.19,0.1925,0.195,0.197,0.1995,0.202,0.2045,0.207,0.209,0.2115,0.214,0.216,0.2185,0.221,0.223,0.2255,0.228,0.23,0.2325,0.235,0.2375,0.24,0.242,0.2445,0.247,0.249,0.2515,0.254,0.256,0.2585,0.261,0.2635,0.266,0.268,0.2705,0.273,0.275,0.2775,0.28,0.282,0.2845,0.287,0.2895,0.292,0.294,0.2965,0.299,0.301,0.3035,0.306,0.308,0.3105,0.313,0.3155,0.318,0.32,0.3225,0.325,0.327,0.3295,0.332,0.334,0.3365,0.339,0.3415,0.344,0.346,0.3485,0.351,0.353,0.3555,0.358,0.36,0.3625,0.365,0.3675,0.37,0.372,0.3745,0.377,0.379,0.3815,0.384,0.386,0.3885,0.391,0.393,0.3955,0.398,0.4005,0.403,0.405,0.4075,0.41,0.412,0.4145,0.417,0.419,0.4215,0.424,0.4265,0.429,0.431,0.4335,0.436,0.438,0.4405,0.443,0.445,0.4475,0.45,0.4525,0.455,0.457,0.4595,0.462,0.464,0.4665,0.469,0.471,0.4735,0.476,0.4785,0.481,0.483,0.4855,0.488,0.49,0.4925,0.495,0.497,0.4995,0.502,0.5045,0.507,0.509,0.5115,0.514,0.516,0.5185,0.521,0.523,0.5255,0.528,0.53,0.5325,0.535,0.5375,0.54,0.542,0.5445,0.547,0.549,0.5515,0.554,0.556,0.5585,0.561,0.5635,0.566,0.568,0.5705,0.573,0.575,0.5775,0.58,0.582,0.5845,0.587,0.5895,0.592,0.594,0.5965,0.599,0.601] },
+  // OMPS_Ozone_Total_Column (162 classes)
+  ozone: { units: 'DU', rgb: '5e4fa23288bd348abc368cbb388eba3a91b93c93b83f96b74198b6439bb5459db447a0b349a2b24ca4b14ea6b050a9af52abae54aead56b0ac59b3ab5bb5aa5db8a95fbaa861bda763bfa666c2a568c3a46bc4a46ec5a471c6a474c7a477c8a47ac9a47dcba47fcca482cda485cea488cfa48bd0a48ed1a490d2a493d3a496d4a499d6a49cd7a49fd8a4a2d9a4a5daa4a8dba4abdda4addea3afdfa3b1e0a2b4e1a2b6e2a1b9e3a1bbe4a0bee5a0c0e69fc3e79fc5e89ec8e99ecaea9dcdeb9dcfec9cd2ed9cd4ee9bd7ef9bd9f09adcf19adef299e1f399e3f498e6f598e7f497e8f396e9f295eaf195ebf094ecef94edee93eeee93efed92f0ec92f1eb91f2ea91f2e990f3e890f4e78ff6e68ff7e58ef8e58ef9e48dfae38dfbe28cfce18cfde08bfee08bfddd89fddb87fdd985fdd783fdd581fdd380fdd17efdcf7dfdcd7bfdcb79fdc977fdc775fdc473fdc272fdc070fdbe6ffdbc6dfdba6bfdb869fdb668fdb466fdb264fdb062fdae61fcab5ffca85efba55dfba35cfaa05afa9d59fa9a58fa9857f99555f99254f88f52f88d51f78a50f7884ff7854ef7824df67f4bf67d4af57a49f57748f47446f47245f46f44f46d43f26b43f16944ef6744ee6545ed6345ec6146ea5f46e95d47e85b47e75948e55748e45549e25349e1514ae0504a9e0142',
+    val: [98.75,101.25,103.75,106.25,108.75,111.25,113.75,116.25,118.75,121.25,123.75,126.25,128.75,131.25,133.75,136.25,138.75,141.25,143.75,146.25,148.75,151.25,153.75,156.25,158.75,161.25,163.75,166.25,168.75,171.25,173.75,176.25,178.75,181.25,183.75,186.25,188.75,191.25,193.75,196.25,198.75,201.25,203.75,206.25,208.75,211.25,213.75,216.25,218.75,221.25,223.75,226.25,228.75,231.25,233.75,236.25,238.75,241.25,243.75,246.25,248.75,251.25,253.75,256.25,258.75,261.25,263.75,266.25,268.75,271.25,273.75,276.25,278.75,281.25,283.75,286.25,288.75,291.25,293.75,296.25,298.75,301.25,303.75,306.25,308.75,311.25,313.75,316.25,318.75,321.25,323.75,326.25,328.75,331.25,333.75,336.25,338.75,341.25,343.75,346.25,348.75,351.25,353.75,356.25,358.75,361.25,363.75,366.25,368.75,371.25,373.75,376.25,378.75,381.25,383.75,386.25,388.75,391.25,393.75,396.25,398.75,401.25,403.75,406.25,408.75,411.25,413.75,416.25,418.75,421.25,423.75,426.25,428.75,431.25,433.75,436.25,438.75,441.25,443.75,446.25,448.75,451.25,453.75,456.25,458.75,461.25,463.75,466.25,468.75,471.25,473.75,476.25,478.75,481.25,483.75,486.25,488.75,491.25,493.75,496.25,498.75,501.25] },
+};
+// END RASTER_LUTS
+
+// EUMETView MTG FCI IR10.5, style mtg_fd_ir105_hrfi_grayscale: a linear SLD
+// ramp (quantity 1 → #fefefe … 255 → #010101, opaque, no reused colours).
+// Level → °C was calibrated against time-matched GOES-East Band 13 over the
+// tropical Atlantic (T ≈ 29.5 − 0.41·level); good to a few °C on the warm
+// side, the cold end is extrapolated (see test_report.md).
+RASTER_LUTS.mtgGrey = (() => {
+  let rgb = '', val = [];
+  for (let l = 1; l <= 254; l++) { const h = l.toString(16).padStart(2, '0'); rgb += h + h + h; val.push(+(29.5 - 0.41 * l).toFixed(2)); }
+  return { units: '°C (approx.)', rgb, val };
+})();
+
+// Piecewise-linear RGBA ramp. stops: [[value, [r,g,b,a(0-1)]], ...] ascending.
+// Two stops at (almost) the same value make a hard step.
+function rasterRampColor(stops, v) {
+  if (v <= stops[0][0]) return stops[0][1];
+  for (let i = 1; i < stops.length; i++) {
+    if (v <= stops[i][0]) {
+      const [v0, c0] = stops[i - 1], [v1, c1] = stops[i];
+      const t = v1 === v0 ? 1 : (v - v0) / (v1 - v0);
+      return c0.map((c, k) => c + (c1[k] - c) * t);
+    }
+  }
+  return stops[stops.length - 1][1];
+}
+
+// Legend gradient: tick values are spread evenly along the bar (so they line
+// up with the space-between `.mls-scale-labels`), the value axis in between is
+// piecewise linear. `marks` draws thin light rules at given values.
+function rasterLegendCss(stops, ticks, marks = []) {
+  const n = ticks.length - 1;
+  const pos = v => {
+    if (v <= ticks[0]) return 0;
+    for (let i = 1; i <= n; i++) if (v <= ticks[i]) return ((i - 1) + (v - ticks[i - 1]) / (ticks[i] - ticks[i - 1])) / n * 100;
+    return 100;
+  };
+  const rgba = c => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${+c[3].toFixed(2)})`;
+  const vals = new Set(ticks);
+  stops.forEach(([v]) => { if (v > ticks[0] && v < ticks[n]) vals.add(v); });
+  for (let i = 0; i < n; i++) for (let k = 1; k < 4; k++) vals.add(ticks[i] + (ticks[i + 1] - ticks[i]) * k / 4);
+  let pts = [...vals].sort((a, b) => a - b).map(v => [pos(v), rgba(rasterRampColor(stops, v))]);
+  for (const m of marks) {
+    const p = pos(m), c = rgba(rasterRampColor(stops, m)), w = 0.6, rule = 'rgba(236,239,244,.95)';
+    pts = pts.filter(([q]) => Math.abs(q - p) > w);
+    pts.push([p - w, c], [p - w, rule], [p + w, rule], [p + w, c]);
+  }
+  pts.sort((a, b) => a[0] - b[0]);
+  return `linear-gradient(to right,${pts.map(([p, c]) => `${c} ${+p.toFixed(1)}%`).join(',')})`;
+}
+
+const RASTER_PALETTES = (() => {
+  const P = {
+    // SST: one teal/blue family, dark = cold, capped at medium lightness so
+    // white/lavender lines stay visible. 26 °C (TC fuel) is ruled on the legend.
+    sst: {
+      units: '°C',
+      stops: [[0, [12, 20, 40, .8]], [10, [18, 44, 82, .8]], [18, [22, 70, 112, .8]], [24, [26, 98, 128, .8]], [27, [30, 120, 132, .8]], [30, [44, 142, 138, .8]]],
+      ticks: [0, 10, 18, 24, 26, 30], labels: ['0', '10', '18', '24', '26 TC', '30 °C'], marks: [26],
+    },
+    // Enhanced-IR "clouds only": warm/clear ground transparent, colder =
+    // brighter and more opaque. Shared by GOES-West, GOES-East, Himawari.
+    ir: {
+      units: '°C',
+      stops: [[-90, [255, 255, 255, .95]], [-60, [235, 242, 248, .9]], [-40, [196, 204, 212, .75]], [-20, [140, 146, 152, .5]], [0, [100, 104, 108, .18]], [10, [90, 90, 90, 0]]],
+      ticks: [-90, -60, -40, -20, 0, 10], labels: ['−90', '−60', '−40', '−20', '0', '10 °C'],
+    },
+    // Sea ice: transparent below 15 % (the usual ice-edge threshold), pale
+    // blue-grey → white at 100 %.
+    seaIce: {
+      units: '%',
+      stops: [[0, [150, 168, 188, 0]], [14.9, [150, 168, 188, 0]], [15, [150, 168, 188, .45]], [50, [186, 200, 216, .7]], [85, [222, 230, 240, .85]], [100, [248, 250, 252, .95]]],
+      ticks: [0, 15, 50, 85, 100], labels: ['0', '15', '50', '85', '100 %'],
+    },
+    // GRACE LWE anomaly (cm; negative = less water than the 2004–09 baseline).
+    // Diverging brown (deficit) / blue (surplus); |v| < 3 cm transparent.
+    grace: {
+      units: 'cm',
+      stops: [[-30, [98, 64, 38, .85]], [-15, [128, 92, 60, .72]], [-6, [156, 126, 96, .5]], [-3, [170, 146, 120, .28]], [-2.99, [170, 146, 120, 0]],
+              [2.99, [112, 150, 180, 0]], [3, [112, 150, 180, .28]], [6, [88, 134, 176, .5]], [15, [58, 104, 162, .72]], [30, [34, 70, 136, .85]]],
+      ticks: [-30, -15, -3, 3, 15, 30], labels: ['−30', '−15', '−3', '+3', '+15', '+30 cm'],
+    },
+    // SMAP soil moisture: dry brown → neutral grey → wet teal, muted. Values
+    // above the last stop (GIBS's flat-grey top class) clamp to the wettest teal.
+    smapRoot: {
+      units: 'm³/m³',
+      stops: [[0.04, [104, 72, 44, .82]], [0.12, [140, 104, 70, .75]], [0.2, [160, 146, 122, .62]], [0.26, [120, 146, 140, .62]], [0.32, [76, 138, 140, .72]], [0.42, [44, 114, 126, .8]], [0.55, [24, 86, 106, .88]]],
+      ticks: [0.04, 0.12, 0.2, 0.26, 0.32, 0.42, 0.55], labels: ['0.04', '0.12', '0.20', '0.26', '0.32', '0.42', '≥0.55'],
+    },
+    // OMPS total ozone: single muted violet; low (ozone-hole, < 220 DU) is the
+    // most saturated and opaque, typical/high values fade out.
+    ozone: {
+      units: 'DU',
+      stops: [[100, [60, 28, 122, .88]], [200, [82, 52, 146, .8]], [220, [100, 76, 158, .7]], [240, [124, 108, 168, .5]], [300, [146, 138, 178, .34]], [400, [172, 168, 196, .24]], [500, [196, 194, 214, .18]]],
+      ticks: [100, 220, 300, 400, 500], labels: ['100', '220 hole', '300', '400', '500 DU'], marks: [220],
+    },
+  };
+  P.smapSurf = { ...P.smapRoot, units: 'm³/m³' };
+  for (const k in P) {
+    const p = P[k];
+    p.legend = { css: rasterLegendCss(p.stops, p.ticks, p.marks), labels: p.labels };
+  }
+  return P;
+})();
+
+// Legend markup matching index.html's .mls-gradient-bar / .mls-scale-labels.
+function rasterLegendHTML(key) {
+  const lg = RASTER_PALETTES[key].legend;
+  return `<div class="mls-gradient-bar" style="background:${lg.css}"></div>\n` +
+         `<div class="mls-scale-labels">${lg.labels.map(l => `<span>${l}</span>`).join('')}</div>`;
+}
+
+// GIBS Band-13 IR grey ambiguity. The enhanced-IR table reuses greys for the
+// −70…−80 °C band (230,204,…,5) and for warm surfaces (−19…+57 °C, 197→1).
+// Tiles are bilinearly resampled, so every grey ≤ ~213 could be either.
+// Pixels are resolved spatially: cold greys sit between the red (−60…−70) and
+// magenta (−81…−91) bands, warm greys next to cyan/blue (−19…−31). Each
+// ambiguous pixel takes a vote of classified pixels in a (2r+1)² window
+// (cold evidence: value ≤ coldEvidence; warm evidence: warmEvidence ≤ value,
+// non-grey), repeating passes with a growing window so resolved pixels vote
+// too; anything still undecided (no evidence anywhere in the tile) falls back
+// to warm (the common case, and the safe one: warm → transparent-ish rather
+// than a bright false cloud). A final 3×3 majority pass removes lone flips.
+const RASTER_IR_GREY = { coldMin: -81, coldMax: -69, warmMin: -20, maxLevel: 213,
+                         coldEvidence: -58, warmEvidence: -36, radius: 4, maxRadius: 32, passes: 10 };
+
+const RasterRecolor = (() => {
+  const LITTLE = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+  const pack = c => {
+    const r = Math.round(c[0]), g = Math.round(c[1]), b = Math.round(c[2]), a = Math.round(c[3] * 255);
+    return (LITTLE ? ((a << 24) | (b << 16) | (g << 8) | r) : ((r << 24) | (g << 16) | (b << 8) | a)) >>> 0;
+  };
+
+  // Parse a LUT once: typed arrays + exact-match map (+ grey band indexes).
+  function prep(lut) {
+    if (lut._p) return lut._p;
+    const n = lut.val.length, rgb = new Uint8Array(n * 3), exact = new Map();
+    for (let i = 0; i < n; i++) {
+      for (let k = 0; k < 3; k++) rgb[i * 3 + k] = parseInt(lut.rgb.substr(i * 6 + k * 2, 2), 16);
+      const key = (rgb[i * 3] << 16) | (rgb[i * 3 + 1] << 8) | rgb[i * 3 + 2];
+      if (!exact.has(key)) exact.set(key, i);
+    }
+    lut._p = { n, rgb, val: Float32Array.from(lut.val), exact };
+    return lut._p;
+  }
+
+  function nearest(p, r, g, b, idxs) {
+    let best = -1, bd = Infinity;
+    const list = idxs || null, m = list ? list.length : p.n;
+    for (let j = 0; j < m; j++) {
+      const i = list ? list[j] : j;
+      const dr = p.rgb[i * 3] - r, dg = p.rgb[i * 3 + 1] - g, db = p.rgb[i * 3 + 2] - b;
+      const d = dr * dr + dg * dg + db * db;
+      if (d < bd) { bd = d; best = i; }
+    }
+    return [best, bd];
+  }
+
+  // One engine per (lut, palette, options) — shared by GOES-W/E/Himawari so the
+  // per-colour cache warms once. Cache: 24-bit colour → entry index into
+  // parallel arrays (packed output, evidence class, warm/cold alternatives).
+  const engines = new Map();
+  function engine(lut, palette, tol, amb) {
+    const id = [lut.rgb.length, lut.val[0], palette.stops.length, JSON.stringify(palette.stops), tol, !!amb].join('|');
+    let e = engines.get(id);
+    if (e) return e;
+    const p = prep(lut);
+    const vmin = palette.stops[0][0], vmax = palette.stops[palette.stops.length - 1][0], N = 4096;
+    const table = new Uint32Array(N);
+    for (let i = 0; i < N; i++) table[i] = pack(rasterRampColor(palette.stops, vmin + (vmax - vmin) * i / (N - 1)));
+    const colour = v => table[v <= vmin ? 0 : v >= vmax ? N - 1 : Math.round((v - vmin) / (vmax - vmin) * (N - 1))];
+    let warmG = null, coldG = null;
+    if (amb) {
+      warmG = []; coldG = [];
+      for (let i = 0; i < p.n; i++) {
+        const r = p.rgb[i * 3], g = p.rgb[i * 3 + 1], b = p.rgb[i * 3 + 2], v = p.val[i];
+        if (r !== g || g !== b) continue;
+        if (v >= amb.coldMin && v <= amb.coldMax) coldG.push(i);
+        else if (v >= amb.warmMin) warmG.push(i);
+      }
+    }
+    e = { p, colour, tol2: tol * tol, amb, warmG, coldG,
+          cache: new Map(), px: [], cls: [], alt: [], hits: 0, misses: 0 };
+    // cls: 0 = no data / rejected, 1 = warm evidence, 2 = cold evidence,
+    //      3 = ambiguous grey, 4 = definite but not evidence
+    e.classify = function (key) {
+      const r = key >>> 16, g = (key >>> 8) & 255, b = key & 255;
+      let i = p.exact.get(key), d = 0;
+      if (i === undefined) [i, d] = nearest(p, r, g, b);
+      let px = 0, c = 0, alt = null;
+      if (i >= 0 && d <= e.tol2) {
+        const v = p.val[i];
+        const isGrey = !!amb && p.rgb[i * 3] === p.rgb[i * 3 + 1] && p.rgb[i * 3 + 1] === p.rgb[i * 3 + 2];
+        if (isGrey && (r + g + b) / 3 <= amb.maxLevel) {
+          // could be a warm-surface grey or a −70…−80 °C grey: keep both answers
+          const wv = p.val[nearest(p, r, g, b, warmG)[0]], cv = p.val[nearest(p, r, g, b, coldG)[0]];
+          px = colour(wv); c = 3; alt = [colour(wv), colour(cv), wv, cv];
+        } else if (isGrey) {
+          px = colour(v); c = 2;                 // 204/230 greys and white: only cold
+        } else {
+          px = colour(v);
+          c = !amb ? 4 : v <= amb.coldEvidence ? 2 : v >= amb.warmEvidence ? 1 : 4;
+        }
+      }
+      const idx = e.px.length;
+      e.px.push(px); e.cls.push(c); e.alt.push(alt);
+      e.cache.set(key, idx);
+      return idx;
+    };
+    engines.set(id, e);
+    return e;
+  }
+
+  // Recolour one RGBA ImageData in place. Returns stats for IR grey handling.
+  function process(e, img) {
+    const W = img.width, H = img.height, n = W * H;
+    const u8 = img.data, u32 = new Uint32Array(u8.buffer, u8.byteOffset, n);
+    const idxArr = new Int32Array(n);
+    const cache = e.cache;
+    let lastKey = -1, lastIdx = -1, amb = 0;
+    for (let i = 0; i < n; i++) {
+      const o = i * 4, a = u8[o + 3];
+      if (a === 0) { idxArr[i] = -1; continue; }
+      const key = (u8[o] << 16) | (u8[o + 1] << 8) | u8[o + 2];
+      let idx;
+      if (key === lastKey) idx = lastIdx;
+      else {
+        idx = cache.get(key);
+        if (idx === undefined) { idx = e.classify(key); e.misses++; } else e.hits++;
+        lastKey = key; lastIdx = idx;
+      }
+      idxArr[i] = idx;
+      if (e.cls[idx] === 3) amb++;
+    }
+    let rejected = 0;
+    for (let i = 0; i < n; i++) if (idxArr[i] >= 0 && e.cls[idxArr[i]] === 0) rejected++;
+    const stats = { opaque: 0, rejected, ambiguous: amb, cold: 0, warmVote: 0, warmDefault: 0, passes: 0 };
+    let resolved = null;   // per-pixel: 1 warm, 2 cold (only for ambiguous)
+    if (e.amb && amb) {
+      const S = W + 1;
+      const state = new Uint8Array(n);   // evidence class per pixel
+      const pend = [];
+      for (let i = 0; i < n; i++) {
+        const idx = idxArr[i];
+        if (idx < 0) continue;
+        const c = e.cls[idx];
+        if (c === 1 || c === 2) state[i] = c;
+        else if (c === 3) pend.push(i);
+      }
+      resolved = new Uint8Array(n);
+      const satW = new Int32Array(S * (H + 1)), satC = new Int32Array(S * (H + 1));
+      let todo = pend;
+      for (let pass = 0; pass < e.amb.passes && todo.length; pass++) {
+        // window grows 4,4,8,8,16,16,… so interiors of wide uniform grey areas
+        // are reached in a few passes, while edge pixels still vote locally
+        const R = Math.min(e.amb.maxRadius, e.amb.radius << (pass >> 1));
+        stats.passes++;
+        for (let y = 0; y < H; y++) {
+          let rw = 0, rc = 0;
+          for (let x = 0; x < W; x++) {
+            const s = state[y * W + x];
+            if (s === 1) rw++; else if (s === 2) rc++;
+            satW[(y + 1) * S + x + 1] = satW[y * S + x + 1] + rw;
+            satC[(y + 1) * S + x + 1] = satC[y * S + x + 1] + rc;
+          }
+        }
+        const next = [], newly = [];
+        for (const i of todo) {
+          const x = i % W, y = (i / W) | 0;
+          const x0 = x - R < 0 ? 0 : x - R, x1 = x + R + 1 > W ? W : x + R + 1;
+          const y0 = y - R < 0 ? 0 : y - R, y1 = y + R + 1 > H ? H : y + R + 1;
+          const w = satW[y1 * S + x1] - satW[y0 * S + x1] - satW[y1 * S + x0] + satW[y0 * S + x0];
+          const c = satC[y1 * S + x1] - satC[y0 * S + x1] - satC[y1 * S + x0] + satC[y0 * S + x0];
+          if (c > w) { newly.push(i, 2); stats.cold++; }
+          else if (w > c) { newly.push(i, 1); stats.warmVote++; }
+          else next.push(i);
+        }
+        for (let k = 0; k < newly.length; k += 2) { state[newly[k]] = newly[k + 1]; resolved[newly[k]] = newly[k + 1]; }
+        todo = next;
+        if (!newly.length && R >= e.amb.maxRadius) break;
+      }
+      stats.warmDefault = todo.length;
+      // Despeckle: an ambiguous pixel outvoted by ≥ 5 of its 8 neighbours flips.
+      stats.flipped = 0;
+      const flips = [];
+      for (const i of pend) {
+        const x = i % W, y = (i / W) | 0;
+        if (x === 0 || y === 0 || x === W - 1 || y === H - 1) continue;
+        const mine = resolved[i] === 2 ? 2 : 1;
+        let other = 0;
+        for (let dy = -W; dy <= W; dy += W) for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const j = i + dy + dx, s = state[j] || (resolved[j] ? resolved[j] : (e.cls[idxArr[j]] === 3 ? 1 : 0));
+          if (s && s !== mine) other++;
+        }
+        if (other >= 5) flips.push(i, mine === 2 ? 1 : 2);
+      }
+      for (let k = 0; k < flips.length; k += 2) resolved[flips[k]] = flips[k + 1];
+      stats.flipped = flips.length / 2;
+    }
+    for (let i = 0; i < n; i++) {
+      const idx = idxArr[i];
+      if (idx < 0) continue;
+      let px = e.px[idx];
+      stats.opaque++;
+      if (resolved && e.cls[idx] === 3) px = e.alt[idx][resolved[i] === 2 ? 1 : 0];
+      if (e.debug) {   // diagnostic colours: red = grey→cold, blue = grey→warm by vote, green = warm by default, magenta = rejected colour
+        const c = e.cls[idx];
+        px = c === 0 ? 0xffff00ff : c !== 3 ? (px & 0x00ffffff) | 0x30000000 : resolved[i] === 2 ? 0xff0000ff : resolved[i] === 1 ? 0xffff0000 : 0xff00c000;
+      }
+      const a = u8[i * 4 + 3];
+      if (a < 255 && px) {        // partially transparent source edge: scale alpha
+        const pa = LITTLE ? px >>> 24 : px & 255, na = Math.round(pa * a / 255);
+        px = LITTLE ? ((px & 0x00ffffff) | (na << 24)) >>> 0 : ((px & 0xffffff00) | na) >>> 0;
+      }
+      u32[i] = px;
+    }
+    // Colours no palette entry explains (bilinear blends across distant table
+    // entries at sharp edges) would punch dark holes: fill them from the mean
+    // (premultiplied) of their matched 8-neighbours.
+    stats.filled = 0;
+    if (rejected && !e.debug) {
+      for (let i = 0; i < n; i++) {
+        const idx = idxArr[i];
+        if (idx < 0 || e.cls[idx] !== 0) continue;
+        const x = i % W, y = (i / W) | 0;
+        let sr = 0, sg = 0, sb = 0, sa = 0, k = 0;
+        for (let yy = y - 1; yy <= y + 1; yy++) for (let xx = x - 1; xx <= x + 1; xx++) {
+          if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+          const j = yy * W + xx, jd = idxArr[j];
+          if (jd < 0 || e.cls[jd] === 0) continue;
+          const o = j * 4, a = u8[o + 3];
+          sr += u8[o] * a; sg += u8[o + 1] * a; sb += u8[o + 2] * a; sa += a; k++;
+        }
+        if (!k || !sa) continue;
+        const o = i * 4;
+        u8[o] = sr / sa; u8[o + 1] = sg / sa; u8[o + 2] = sb / sa; u8[o + 3] = sa / k;
+        stats.filled++;
+      }
+    }
+    return stats;
+  }
+
+  return { engine, process, prep };
+})();
+
+if (typeof L !== 'undefined') {
+  L.GridLayer.Recolor = L.GridLayer.extend({
+    options: {
+      url: '',
+      nativeMaxZoom: 6,      // deepest zoom GIBS publishes (Level6 / Level7)
+      lut: null,             // RASTER_LUTS.<x>
+      palette: null,         // RASTER_PALETTES.<x>
+      tolerance: null,       // max RGB distance for a nearest-colour match (default: 40 for IR, 12 otherwise)
+      greyAmbiguity: null,   // RASTER_IR_GREY for the Band-13 IR table (auto when lut === RASTER_LUTS.ir)
+      pixelated: false,      // over-zoom: nearest-neighbour instead of smoothed upscaling
+      cacheSize: 64,         // recoloured native tiles kept for over-zoom children
+    },
+
+    initialize(options) {
+      L.GridLayer.prototype.initialize.call(this, options);
+      const o = this.options;
+      if (o.greyAmbiguity === null) o.greyAmbiguity = (typeof RASTER_LUTS !== 'undefined' && o.lut === RASTER_LUTS.ir) ? RASTER_IR_GREY : false;
+      if (o.tolerance === null) o.tolerance = o.greyAmbiguity ? 40 : 12;
+      this._url = o.url;
+      this._native = new Map();   // url -> Promise<canvas|null>, LRU by insertion order
+      this._gen = 0;
+      this.timings = [];          // ms of pure recolour work per native tile
+      this.greyStats = { tiles: 0, ambiguous: 0, cold: 0, warmVote: 0, warmDefault: 0 };
+      this._engine = RasterRecolor.engine(o.lut, o.palette, o.tolerance, o.greyAmbiguity || null);
+    },
+
+    // Same contract as L.TileLayer#setUrl (refreshGibsDailyLayers relies on _url).
+    setUrl(url, noRedraw) {
+      if (url === this._url && noRedraw === undefined) noRedraw = true;
+      this._url = this.options.url = url;
+      this._native.clear();
+      if (!noRedraw) this.redraw();
+      return this;
+    },
+
+    // Re-fetch everything (e.g. for 'default' = latest imagery).
+    refresh() { this._native.clear(); return this.redraw(); },
+
+    redraw() { this._gen++; return L.GridLayer.prototype.redraw.call(this); },
+
+    // {x}/{y}/{z} for WMTS, or {bbox} (EPSG:3857 minx,miny,maxx,maxy) for a WMS GetMap URL.
+    getTileUrl(c) {
+      const d = { x: c.x, y: c.y, z: c.z, bbox: '' };
+      if (this._url.indexOf('{bbox}') >= 0) {
+        const E = 20037508.342789244, s = 2 * E / 2 ** c.z;
+        d.bbox = [-E + c.x * s, E - (c.y + 1) * s, -E + (c.x + 1) * s, E - c.y * s].map(v => v.toFixed(2)).join(',');
+      }
+      return L.Util.template(this._url, d);
+    },
+
+    _nativeTile(src) {
+      const url = this.getTileUrl(src);
+      const hit = this._native.get(url);
+      if (hit) { this._native.delete(url); this._native.set(url, hit); return hit; }
+      const pr = new Promise(resolve => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.decoding = 'async';
+        img.onload = () => {
+          try {
+            const cv = document.createElement('canvas');
+            cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0);
+            const t0 = performance.now();
+            const data = ctx.getImageData(0, 0, cv.width, cv.height);
+            const st = RasterRecolor.process(this._engine, data);
+            ctx.putImageData(data, 0, 0);
+            const ms = performance.now() - t0;
+            this.timings.push(ms); if (this.timings.length > 500) this.timings.shift();
+            if (this.options.greyAmbiguity) {
+              const g = this.greyStats; g.tiles++;
+              g.ambiguous += st.ambiguous; g.cold += st.cold; g.warmVote += st.warmVote; g.warmDefault += st.warmDefault;
+            }
+            this.fire('tilerecolor', { url, ms, stats: st });
+            resolve(cv);
+          } catch (err) {           // tainted canvas / decode problem → empty tile
+            console.warn('recolor failed', url, err);
+            resolve(null);
+          }
+        };
+        // GIBS intermittently answers 404/500 for tiles that exist (the same tile
+        // succeeds seconds later), so retry twice with a short backoff before
+        // settling for an empty tile.
+        let attempt = 0;
+        img.onerror = () => {
+          if (attempt++ < 2) setTimeout(() => { img.src = url; }, 700 * attempt);
+          else resolve(null);
+        };
+        img.src = url;
+      });
+      this._native.set(url, pr);
+      while (this._native.size > this.options.cacheSize) this._native.delete(this._native.keys().next().value);
+      pr.then(cv => { if (!cv) this._native.delete(url); });   // don't pin failures
+      return pr;
+    },
+
+    createTile(coords, done) {
+      const size = this.getTileSize();
+      const tile = document.createElement('canvas');
+      tile.width = size.x; tile.height = size.y;
+      const z = Math.min(coords.z, this.options.nativeMaxZoom);
+      const scale = 2 ** (coords.z - z);
+      const src = { x: Math.floor(coords.x / scale), y: Math.floor(coords.y / scale), z };
+      const gen = this._gen;
+      this._nativeTile(src).then(cv => {
+        if (gen !== this._gen) return;          // superseded by setUrl/redraw
+        if (cv) {
+          const ctx = tile.getContext('2d');
+          ctx.imageSmoothingEnabled = !this.options.pixelated;
+          const sw = cv.width / scale, sh = cv.height / scale;
+          const ox = (coords.x - src.x * scale) * sw, oy = (coords.y - src.y * scale) * sh;
+          ctx.drawImage(cv, ox, oy, sw, sh, 0, 0, size.x, size.y);
+        }
+        done(null, tile);                        // errors → empty tile, never a broken image
+      });
+      return tile;
+    },
+
+    timingSummary() {
+      const t = [...this.timings].sort((a, b) => a - b);
+      if (!t.length) return null;
+      const q = f => +t[Math.min(t.length - 1, Math.floor(f * t.length))].toFixed(2);
+      return { tiles: t.length, median: q(0.5), p90: q(0.9), max: q(1),
+               mean: +(t.reduce((s, x) => s + x, 0) / t.length).toFixed(2) };
+    },
+  });
+
+}
+
+// Factory, mirroring L.tileLayer(url, opts).
+function recolorLayer(options) { return new L.GridLayer.Recolor(options); }
 
 function initMap() {
   map = L.map('map', {
@@ -400,121 +1124,179 @@ function initMap() {
   );
 
   // NASA GIBS — GOES-West Band 13 Clean Infrared (covers Pacific + PNG region)
-  goesWLayer = L.tileLayer(
-    `${_gibsBase}/GOES-West_ABI_Band13_Clean_Infrared/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
-    {
-      attribution: 'GOES-West IR &copy; <a href="https://www.nesdis.noaa.gov/" target="_blank">NOAA/NESDIS</a> via <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank">NASA GIBS</a>',
-      opacity: 0.75,
-      maxNativeZoom: 6,
-      zIndex: 4
-    }
-  );
+  // Recoloured by value (see RASTER PALETTES): quiet ground that coloured symbols stay readable on
+  goesWLayer = recolorLayer({
+    url: `${_gibsBase}/GOES-West_ABI_Band13_Clean_Infrared/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
+    nativeMaxZoom: 6,
+    lut: RASTER_LUTS.ir,
+    palette: RASTER_PALETTES.ir,
+    attribution: 'GOES-West IR &copy; <a href="https://www.nesdis.noaa.gov/" target="_blank">NOAA/NESDIS</a> via <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank">NASA GIBS</a>',
+    opacity: 1,
+    zIndex: 4,
+  });
 
   // NASA GIBS — GOES-East Band 13 Clean Infrared (covers Americas + Atlantic)
-  goesELayer = L.tileLayer(
-    `${_gibsBase}/GOES-East_ABI_Band13_Clean_Infrared/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
-    {
-      attribution: 'GOES-East IR &copy; <a href="https://www.nesdis.noaa.gov/" target="_blank">NOAA/NESDIS</a> via <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank">NASA GIBS</a>',
-      opacity: 0.75,
-      maxNativeZoom: 6,
-      zIndex: 4
-    }
-  );
+  // Recoloured by value (see RASTER PALETTES): quiet ground that coloured symbols stay readable on
+  goesELayer = recolorLayer({
+    url: `${_gibsBase}/GOES-East_ABI_Band13_Clean_Infrared/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
+    nativeMaxZoom: 6,
+    lut: RASTER_LUTS.ir,
+    palette: RASTER_PALETTES.ir,
+    attribution: 'GOES-East IR &copy; <a href="https://www.nesdis.noaa.gov/" target="_blank">NOAA/NESDIS</a> via <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank">NASA GIBS</a>',
+    opacity: 1,
+    zIndex: 4,
+  });
 
   // EUMETSAT EUMETView — MTG-I FCI IR 10.5 µm full disk (0°), 10-min cadence.
   // The operator's own service: CORS-enabled, no key, no quota. Omitting
-  // `time` serves the latest frame, and style_02 is the enhanced-IR ramp that
-  // matches the GOES/Himawari look.
-  meteosatLayer = L.tileLayer.wms('https://view.eumetsat.int/geoserver/wms', {
-    layers:      'mtg_fd:ir105_hrfi',
-    styles:      'mtg_fd:mtg_fd_ir105_hrfi_style_02',
-    format:      'image/png',
-    transparent: true,
-    opacity:     0.75,
-    zIndex:      4,
+  // `time` serves the latest frame. The grayscale style is a linear ramp with no
+  // reused colours; RASTER_LUTS.mtgGrey maps it back to approximate °C
+  // (calibrated against GOES-East) so it gets the same "clouds only" palette.
+  meteosatLayer = recolorLayer({
+    url: 'https://view.eumetsat.int/geoserver/wms?service=WMS&request=GetMap&version=1.1.1' +
+         '&layers=mtg_fd:ir105_hrfi&styles=mtg_fd:mtg_fd_ir105_hrfi_grayscale' +
+         '&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox}',
+    nativeMaxZoom: 8,
+    lut: RASTER_LUTS.mtgGrey,
+    palette: RASTER_PALETTES.ir,
     attribution: 'Meteosat MTG-I FCI &copy; <a href="https://www.eumetsat.int/" target="_blank">EUMETSAT</a>',
+    opacity: 1,
+    zIndex: 4,
   });
 
   // NASA GIBS — Himawari AHI Band 13 Clean Infrared (East Asia / W Pacific),
   // 10-minute cadence.
-  himawariLayer = L.tileLayer(
-    `${_gibsBase}/Himawari_AHI_Band13_Clean_Infrared/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
-    {
-      attribution: 'Himawari AHI &copy; <a href="https://www.data.jma.go.jp/mscweb/en/index.html" target="_blank">JMA</a> via <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank">NASA GIBS</a>',
-      opacity: 0.75,
-      maxNativeZoom: 6,
-      zIndex: 4
-    }
+  // Recoloured by value (see RASTER PALETTES): quiet ground that coloured symbols stay readable on
+  himawariLayer = recolorLayer({
+    url: `${_gibsBase}/Himawari_AHI_Band13_Clean_Infrared/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
+    nativeMaxZoom: 6,
+    lut: RASTER_LUTS.ir,
+    palette: RASTER_PALETTES.ir,
+    attribution: 'Himawari AHI &copy; <a href="https://www.data.jma.go.jp/mscweb/en/index.html" target="_blank">JMA</a> via <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank">NASA GIBS</a>',
+    opacity: 1,
+    zIndex: 4,
+  });
+
+  // ── Enhanced-colour IR: the providers' original colour tables, used when the
+  // Satellite imagery style is "Enhanced". Same imagery as the clouds-only
+  // layers above; a colour field, so it follows the one-field rule.
+  const _irAttr = layer => layer.options.attribution;
+  const _gibsIr = product => L.tileLayer(
+    `${_gibsBase}/${product}/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
+    { opacity: 0.8, maxNativeZoom: 6, zIndex: 4 }
   );
+  goesWEnhLayer    = _gibsIr('GOES-West_ABI_Band13_Clean_Infrared');
+  goesEEnhLayer    = _gibsIr('GOES-East_ABI_Band13_Clean_Infrared');
+  himawariEnhLayer = _gibsIr('Himawari_AHI_Band13_Clean_Infrared');
+  goesWEnhLayer.options.attribution    = _irAttr(goesWLayer);
+  goesEEnhLayer.options.attribution    = _irAttr(goesELayer);
+  himawariEnhLayer.options.attribution = _irAttr(himawariLayer);
+  meteosatEnhLayer = L.tileLayer.wms('https://view.eumetsat.int/geoserver/wms', {
+    layers:      'mtg_fd:ir105_hrfi',
+    styles:      'mtg_fd:mtg_fd_ir105_hrfi_style_02',   // EUMETSAT's enhanced-IR ramp
+    format:      'image/png',
+    transparent: true,
+    opacity:     0.8,
+    zIndex:      4,
+    attribution: _irAttr(meteosatLayer),
+  });
+
+  // ── Air Mass RGB (GOES-West, GOES-East, Himawari): a composite of two
+  // water-vapour channels, an ozone channel and IR. Shows dry versus moist
+  // upper air, jet streams and warm/cold air masses. The three discs fit
+  // together, so one toggle shows all of them. Opaque colour field.
+  const _gibsComposite = (product, level, attribution) => L.tileLayer(
+    `${_gibsBase}/${product}/default/default/GoogleMapsCompatible_Level${level}/{z}/{y}/{x}.png`,
+    { opacity: 0.9, maxNativeZoom: level, zIndex: 3, attribution }
+  );
+  const _gibsCredit = (who, href) => `${who} &copy; <a href="${href}" target="_blank">${who.includes('Himawari') ? 'JMA' : 'NOAA/NESDIS'}</a> via <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank">NASA GIBS</a>`;
+  airmassLayer = L.layerGroup([
+    _gibsComposite('Himawari_AHI_Air_Mass', 6, _gibsCredit('Himawari Air Mass', 'https://www.jma.go.jp/')),
+    _gibsComposite('GOES-West_ABI_Air_Mass', 6, _gibsCredit('GOES-West Air Mass', 'https://www.nesdis.noaa.gov/')),
+    _gibsComposite('GOES-East_ABI_Air_Mass', 6, _gibsCredit('GOES-East Air Mass', 'https://www.nesdis.noaa.gov/')),
+  ]);
+
+  // ── GeoColor (GOES-West, GOES-East): near true colour by day, infrared
+  // cloud over a static night-lights background at night. Opaque colour field.
+  geocolorLayer = L.layerGroup([
+    _gibsComposite('GOES-West_ABI_GeoColor', 7, _gibsCredit('GOES-West GeoColor', 'https://www.nesdis.noaa.gov/')),
+    _gibsComposite('GOES-East_ABI_GeoColor', 7, _gibsCredit('GOES-East GeoColor', 'https://www.nesdis.noaa.gov/')),
+  ]);
 
   // NASA GIBS — GRACE-FO groundwater anomaly (global drought proxy, monthly)
-  graceLayer = L.tileLayer(
-    `${_gibsBase}/GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
-    {
-      attribution: 'GRACE Groundwater &copy; <a href="https://grace.jpl.nasa.gov/" target="_blank">NASA/JPL GRACE</a> via NASA GIBS',
-      opacity: 0.75,
-      maxNativeZoom: 6,
-      zIndex: 3
-    }
-  );
+  // Recoloured by value (see RASTER PALETTES): quiet ground that coloured symbols stay readable on
+  graceLayer = recolorLayer({
+    url: `${_gibsBase}/GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
+    nativeMaxZoom: 6,
+    lut: RASTER_LUTS.grace,
+    palette: RASTER_PALETTES.grace,
+    attribution: 'GRACE Groundwater &copy; <a href="https://grace.jpl.nasa.gov/" target="_blank">NASA/JPL GRACE</a> via NASA GIBS',
+    opacity: 1,
+    zIndex: 3,
+  });
 
   // NASA GIBS — SMAP root-zone soil moisture (global, ~3-day lag)
-  smapRootLayer = L.tileLayer(
-    `${_gibsBase}/SMAP_L4_Analyzed_Root_Zone_Soil_Moisture/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
-    {
-      attribution: 'SMAP Root Zone &copy; <a href="https://smap.jpl.nasa.gov/" target="_blank">NASA SMAP</a> via NASA GIBS',
-      opacity: 0.75,
-      maxNativeZoom: 6,
-      zIndex: 3
-    }
-  );
+  // Recoloured by value (see RASTER PALETTES): quiet ground that coloured symbols stay readable on
+  smapRootLayer = recolorLayer({
+    url: `${_gibsBase}/SMAP_L4_Analyzed_Root_Zone_Soil_Moisture/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
+    nativeMaxZoom: 6,
+    lut: RASTER_LUTS.smapRoot,
+    palette: RASTER_PALETTES.smapRoot,
+    attribution: 'SMAP Root Zone &copy; <a href="https://smap.jpl.nasa.gov/" target="_blank">NASA SMAP</a> via NASA GIBS',
+    opacity: 1,
+    zIndex: 3,
+  });
 
   // NASA GIBS — SMAP surface soil moisture (global, daily passive microwave)
-  smapSurfLayer = L.tileLayer(
-    `${_gibsBase}/SMAP_L3_Passive_Day_Soil_Moisture/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
-    {
-      attribution: 'SMAP Surface &copy; <a href="https://smap.jpl.nasa.gov/" target="_blank">NASA SMAP</a> via NASA GIBS',
-      opacity: 0.75,
-      maxNativeZoom: 6,
-      zIndex: 3
-    }
-  );
+  // Recoloured by value (see RASTER PALETTES): quiet ground that coloured symbols stay readable on
+  smapSurfLayer = recolorLayer({
+    url: `${_gibsBase}/SMAP_L3_Passive_Day_Soil_Moisture/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
+    nativeMaxZoom: 6,
+    lut: RASTER_LUTS.smapSurf,
+    palette: RASTER_PALETTES.smapSurf,
+    attribution: 'SMAP Surface &copy; <a href="https://smap.jpl.nasa.gov/" target="_blank">NASA SMAP</a> via NASA GIBS',
+    opacity: 1,
+    zIndex: 3,
+  });
 
   // NASA GIBS — GHRSST MUR sea surface temperature (1 km, daily L4 analysis)
-  sstLayer = L.tileLayer(
-    `${_gibsBase}/GHRSST_L4_MUR_Sea_Surface_Temperature/default/default/${_gibsTms7}/{z}/{y}/{x}.png`,
-    {
-      attribution: 'SST &copy; <a href="https://podaac.jpl.nasa.gov/" target="_blank">NASA/JPL MUR</a> via NASA GIBS',
-      opacity: 0.75,
-      maxNativeZoom: 7,
-      zIndex: 3
-    }
-  );
+  // Recoloured by value (see RASTER PALETTES): quiet ground that coloured symbols stay readable on
+  sstLayer = recolorLayer({
+    url: `${_gibsBase}/GHRSST_L4_MUR_Sea_Surface_Temperature/default/default/${_gibsTms7}/{z}/{y}/{x}.png`,
+    nativeMaxZoom: 7,
+    lut: RASTER_LUTS.sst,
+    palette: RASTER_PALETTES.sst,
+    attribution: 'SST &copy; <a href="https://podaac.jpl.nasa.gov/" target="_blank">NASA/JPL MUR</a> via NASA GIBS',
+    opacity: 1,
+    zIndex: 3,
+  });
 
   // NASA GIBS — GHRSST MUR sea ice concentration (companion product to SST)
-  seaIceLayer = L.tileLayer(
-    `${_gibsBase}/GHRSST_L4_MUR_Sea_Ice_Concentration/default/default/${_gibsTms7}/{z}/{y}/{x}.png`,
-    {
-      attribution: 'Sea Ice &copy; <a href="https://podaac.jpl.nasa.gov/" target="_blank">NASA/JPL MUR</a> via NASA GIBS',
-      opacity: 0.8,
-      maxNativeZoom: 7,
-      // above sstLayer (3) so ice always draws on top of the water beneath it
-      zIndex: 4
-    }
-  );
+  // Recoloured by value (see RASTER PALETTES): quiet ground that coloured symbols stay readable on
+  seaIceLayer = recolorLayer({
+    url: `${_gibsBase}/GHRSST_L4_MUR_Sea_Ice_Concentration/default/default/${_gibsTms7}/{z}/{y}/{x}.png`,
+    nativeMaxZoom: 7,
+    lut: RASTER_LUTS.seaIce,
+    palette: RASTER_PALETTES.seaIce,
+    attribution: 'Sea Ice &copy; <a href="https://podaac.jpl.nasa.gov/" target="_blank">NASA/JPL MUR</a> via NASA GIBS',
+    opacity: 1,
+    // above sstLayer (3) so ice always draws on top of the water beneath it
+    zIndex: 4,
+  });
 
   // ── Atmospheric composition (daily polar-orbiter products) ──
   // These are swath-based and assembled progressively, so recent days have
   // ragged western coverage. See GIBS_DAILY_OFFSET for the measured numbers.
-  ozoneLayer = L.tileLayer(
-    `${_gibsBase}/OMPS_Ozone_Total_Column/default/${gibsDayOffsetUTC(GIBS_DAILY_OFFSET)}/${_gibsTms}/{z}/{y}/{x}.png`,
-    {
-      attribution: 'Ozone &copy; <a href="https://ozoneaq.gsfc.nasa.gov/" target="_blank">NASA OMPS / Suomi NPP</a> via NASA GIBS',
-      opacity: 0.7,
-      maxNativeZoom: 6,
-      zIndex: 3
-    }
-  );
+  // Recoloured by value (see RASTER PALETTES): quiet ground that coloured symbols stay readable on
+  ozoneLayer = recolorLayer({
+    url: `${_gibsBase}/OMPS_Ozone_Total_Column/default/${gibsDayOffsetUTC(GIBS_DAILY_OFFSET)}/${_gibsTms}/{z}/{y}/{x}.png`,
+    nativeMaxZoom: 6,
+    lut: RASTER_LUTS.ozone,
+    palette: RASTER_PALETTES.ozone,
+    attribution: 'Ozone &copy; <a href="https://ozoneaq.gsfc.nasa.gov/" target="_blank">NASA OMPS / Suomi NPP</a> via NASA GIBS',
+    opacity: 1,
+    zIndex: 3,
+  });
 
   so2Layer = L.tileLayer(
     `${_gibsBase}/OMI_SO2_Lower_Troposphere/default/${gibsDayOffsetUTC(GIBS_DAILY_OFFSET)}/${_gibsTms}/{z}/{y}/{x}.png`,
@@ -589,6 +1371,10 @@ function ensureLayerOn(which) {
 
 function toggleLayer(which) {
   if (!map) return;
+  // Switching a colour field on replaces any field it can't share the map with
+  if (document.getElementById(`toggle-${which}`)?.checked) enforceSingleField(which);
+  // Any manual change means the map no longer matches a scene
+  if (!_applyingScene) markScene(null);
   // Dynamic layers (created async) — handle via shared lookup
   const dynamicMap = { rainviewer: rainviewerLayer };
   if (which in dynamicMap) {
@@ -596,12 +1382,17 @@ function toggleLayer(which) {
     const el = document.getElementById(`toggle-${which}`);
     if (layer) el?.checked ? map.addLayer(layer) : map.removeLayer(layer);
     // If checked but layer not yet loaded, the load function will add it when ready
+    updateFieldState();
     updateMapCount();
     return;
   }
-  const layers = { eq: eqLayer, eas: easLayer, lsr: lsrLayer, eonet: eonetLayer, drought: droughtLayer, gauge: gaugeLayer, volc: volcLayer, gdacs: gdacsLayer, meteoalarm: meteoalarmLayer, wmo: wmoLayer, 'spc-d1': spcD1Layer, 'spc-d2': spcD2Layer, 'spc-d3': spcD3Layer, 'fwx-d1': fwxD1Layer, 'fwx-d2': fwxD2Layer, msc: mscLayer, radar: radarLayer, imerg: imergLayer, goesw: goesWLayer, goese: goesELayer, grace: graceLayer, 'smap-root': smapRootLayer, 'smap-surf': smapSurfLayer, 'dwd-radar': dwdRadarLayer, 'fmi-radar': fmiRadarLayer, sst: sstLayer, seaice: seaIceLayer, wind: windLayer, hur: hurLayer, hurprob: hurProbLayer, ozone: ozoneLayer, so2: so2Layer, himawari: himawariLayer, meteosat: meteosatLayer };
+  const layers = { eq: eqLayer, eas: easLayer, lsr: lsrLayer, eonet: eonetLayer, drought: droughtLayer, gauge: gaugeLayer, volc: volcLayer, gdacs: gdacsLayer, meteoalarm: meteoalarmLayer, wmo: wmoLayer, 'spc-d1': spcD1Layer, 'spc-d2': spcD2Layer, 'spc-d3': spcD3Layer, 'fwx-d1': fwxD1Layer, 'fwx-d2': fwxD2Layer, msc: mscLayer, radar: radarLayer, imerg: imergLayer, airmass: airmassLayer, geocolor: geocolorLayer, grace: graceLayer, 'smap-root': smapRootLayer, 'smap-surf': smapSurfLayer, 'dwd-radar': dwdRadarLayer, 'fmi-radar': fmiRadarLayer, sst: sstLayer, seaice: seaIceLayer, wind: windLayer, hur: hurLayer, hurprob: hurProbLayer, ozone: ozoneLayer, so2: so2Layer, };
   const el = document.getElementById(`toggle-${which}`);
-  if (el && layers[which]) {
+  if (IR_KEYS.includes(which)) {
+    // Both styles exist; only the current one is ever on the map
+    for (const variant of ['clouds', 'enhanced']) map.removeLayer(irLayerFor(which, variant));
+    if (el?.checked) map.addLayer(irLayerFor(which));
+  } else if (el && layers[which]) {
     el.checked ? map.addLayer(layers[which]) : map.removeLayer(layers[which]);
   }
   // Wind needs data the moment it's switched on (reuses a load under 5 min old)
@@ -614,6 +1405,7 @@ function toggleLayer(which) {
     if (el?.checked) loadHurricaneProbs();
     else hurProbLayer?.clearLayers();
   }
+  updateFieldState();
   updateMapCount();
 }
 
@@ -1022,6 +1814,14 @@ function renderEarthquakes() {
 }
 
 // Plot earthquake circle markers
+// Ring colour by age: past hour white, past day amber, past week tan, older grey
+function eqAgeColor(ageMs) {
+  if (ageMs < 3_600_000)       return '#ffffff';
+  if (ageMs < 86_400_000)      return '#f5b841';
+  if (ageMs < 7 * 86_400_000)  return '#c9a66b';
+  return '#9aa3a0';
+}
+
 function plotEarthquakes() {
   if (!map) return;
   eqLayer.clearLayers();
@@ -1034,17 +1834,20 @@ function plotEarthquakes() {
     if (!quake.geometry?.coordinates) continue;
 
     const [lon, lat, depth] = quake.geometry.coordinates;
-    const color  = magFillColor(mag);
     const radius = Math.max(4, mag * 3.8);
-    const isRecent = (Date.now() - (props.time || 0)) < 3600_000; // < 1 hour
+    const ageMs  = Date.now() - (props.time || 0);
+    const isRecent = ageMs < 3600_000; // < 1 hour
 
+    // Hollow rings: size = magnitude, colour = age (the USGS convention). Rings
+    // keep severity colours free for alerts and never hide what's beneath.
+    const ring = eqAgeColor(ageMs);
     const marker = L.circleMarker([lat, lon], {
       radius,
-      fillColor:   color,
-      color:       isRecent ? '#fff' : color,
-      weight:      isRecent ? 1.5   : 0.6,
-      opacity:     0.9,
-      fillOpacity: 0.5
+      color:       ring,
+      weight:      isRecent ? 2.5 : 1.8,
+      opacity:     0.95,
+      fillColor:   ring,
+      fillOpacity: 0.1,
     });
 
     marker.bindPopup(`
@@ -1269,20 +2072,22 @@ function plotAlerts() {
   for (const alert of easData) {
     if (!alert.geometry) continue;
     const props     = alert.properties || alert;
-    const eventName = (props.event || '').toLowerCase();
-    // Event-type overrides take priority over severity colour
-    let color;
-    if (eventName.includes('flood')) color = '#a7c080'; // green — matches standard NWS flood colour
-    else                             color = sevColor[props.severity] || '#aaa';
+    const eventName = props.event || '';
+    // Colour = severity; line style = product type. Floods keep the severity
+    // colour (green vanished into radar echoes) and get a blue edge instead.
+    const color = sevColor[props.severity] || '#aaa';
+    const flood = /flood/i.test(eventName);
 
     try {
-      const layer = L.geoJSON(alert.geometry, {
+      const layer = casedGeoJSON(alert.geometry, {
         style: {
           color,
-          weight:      1.5,
-          opacity:     0.85,
+          weight:      2,
+          opacity:     0.9,
           fillColor:   color,
-          fillOpacity: 0.12
+          fillOpacity: 0.12,
+          dashArray:   ALERT_DASH[alertProductType(eventName)],
+          casing:      flood ? '#3d7fc4' : undefined,
         }
       });
       layer._alertId = alert.id;
@@ -1615,30 +2420,18 @@ function plotEonet() {
 
     const [lon, lat] = geo.coordinates;
     const cat   = eonetCatInfo(event);
-    const isWildfire = event.categories?.some(cat => cat.id === 'wildfires');
 
-    let marker;
-    if (isWildfire) {
-      marker = L.marker([lat, lon], {
-        icon: L.divIcon({
-          html: '<span style="font-size:18px;line-height:1">🔥</span>',
-          className: 'leaflet-marker-emoji',
-          iconSize:   [22, 22],
-          iconAnchor: [11, 11],
-          popupAnchor:[0, -12]
-        })
-      });
-    } else {
-      marker = L.circleMarker([lat, lon], {
-        radius:      7,
-        fillColor:   cat.color,
-        color:       cat.color,
-        weight:      1.5,
-        opacity:     1,
-        fillOpacity: 0.35,
-        dashArray:   '4 3'
-      });
-    }
+    // Category badge (dark rounded square + icon): a shape no other layer uses,
+    // so EONET events don't read as earthquake rings or alert markers
+    const marker = L.marker([lat, lon], {
+      icon: L.divIcon({
+        html: `<div class="eonet-badge" style="border-color:${cat.color}">${cat.icon}</div>`,
+        className: 'leaflet-marker-emoji',
+        iconSize:   [22, 22],
+        iconAnchor: [11, 11],
+        popupAnchor:[0, -12]
+      })
+    });
 
     marker._eonetId = event.id;
     marker.bindPopup(`
@@ -1758,7 +2551,24 @@ function renderFema() {
 ══════════════════════════════════════════════════════ */
 
 let lsrData = [];
-const LSR_COLORS = { torn: '#e67e80', hail: '#dbbc7f', wind: '#83c092' };
+// SPC storm report convention: tornado red, wind blue, hail green.
+// Each type also has its own shape, and all are outlined dark, so they stay
+// separable over green radar echoes.
+const LSR_COLORS = { torn: '#ff4d4d', wind: '#4d9de0', hail: '#3cb371' };
+const LSR_SHAPES = {
+  torn: '<polygon points="7,13 1,2 13,2"/>',                     // ▼
+  wind: '<rect x="2.5" y="2.5" width="9" height="9"/>',           // ■
+  hail: '<circle cx="7" cy="7" r="5"/>',                          // ●
+};
+
+function lsrIcon(type) {
+  const color = LSR_COLORS[type] || '#859289';
+  return L.divIcon({
+    className: 'leaflet-marker-emoji',
+    html: `<svg width="14" height="14" viewBox="0 0 14 14"><g fill="${color}" stroke="#141a1d" stroke-width="1.4" stroke-linejoin="round">${LSR_SHAPES[type] || LSR_SHAPES.hail}</g></svg>`,
+    iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -8],
+  });
+}
 const LSR_ICONS  = { torn: '🌪️', hail: '🌨️', wind: '💨' };
 const LSR_LABELS = { torn: 'Tornado', hail: 'Hail', wind: 'Wind Damage' };
 
@@ -1827,9 +2637,7 @@ function plotLSR() {
     const icon  = LSR_ICONS[report.type]  || '⚡';
     const label = LSR_LABELS[report.type] || 'Storm Report';
     const magStr = lsrMagnitudeLabel(report);
-    L.circleMarker([report.lat, report.lon], {
-      radius: 5, color, fillColor: color, fillOpacity: 0.8, weight: 1.5
-    })
+    L.marker([report.lat, report.lon], { icon: lsrIcon(report.type), zIndexOffset: report.type === 'torn' ? 150 : 0 })
     .bindPopup(`<div class="popup-inner">
       <div class="popup-title">${icon} ${esc(label)}${esc(magStr)}</div>
       <div class="popup-sub">${esc(report.location)}, ${esc(report.county)} Co., ${esc(report.state)}</div>
@@ -1844,16 +2652,21 @@ function plotLSR() {
    SPC CONVECTIVE OUTLOOK — spc.noaa.gov GeoJSON
 ══════════════════════════════════════════════════════ */
 
+// SPC's own categorical colours (their fill values; the official outlines are
+// too dark for a dark basemap). General thunder is drawn without fill, since
+// its pale green would sit on top of green radar echoes.
 const SPC_RISK = {
-  TSTM: { label: 'General Thunderstorms', color: '#a7c080', order: 1 },
-  MRGL: { label: 'Marginal Risk',          color: '#83c092', order: 2 },
-  SLGT: { label: 'Slight Risk',            color: '#dbbc7f', order: 3 },
-  ENH:  { label: 'Enhanced Risk',          color: '#e69875', order: 4 },
-  MDT:  { label: 'Moderate Risk',          color: '#e67e80', order: 5 },
-  HIGH: { label: 'High Risk',              color: '#d699b6', order: 6 },
+  TSTM: { label: 'General Thunderstorms', color: '#c1e9c1', order: 1 },
+  MRGL: { label: 'Marginal Risk',          color: '#66a366', order: 2 },
+  SLGT: { label: 'Slight Risk',            color: '#ffe066', order: 3 },
+  ENH:  { label: 'Enhanced Risk',          color: '#ffa366', order: 4 },
+  MDT:  { label: 'Moderate Risk',          color: '#e06666', order: 5 },
+  HIGH: { label: 'High Risk',              color: '#ee99ee', order: 6 },
 };
+// Day 1 solid, day 2 dashed, day 3 dotted, so stacked days stay distinguishable
+const OUTLOOK_DAY_DASH = { 1: null, 2: '8 6', 3: '2 5' };
 
-function _buildSpcLayer(geojson, layer) {
+function _buildSpcLayer(geojson, layer, day) {
   layer.clearLayers();
   if (!geojson?.features?.length) return;
   // Sort lowest→highest risk so higher risk renders on top
@@ -1862,11 +2675,12 @@ function _buildSpcLayer(geojson, layer) {
     const orderB = SPC_RISK[featB.properties.LABEL]?.order ?? 0;
     return orderA - orderB;
   });
-  L.geoJSON({ type: 'FeatureCollection', features }, {
+  casedGeoJSON({ type: 'FeatureCollection', features }, {
     style(feature) {
-      const risk = SPC_RISK[feature.properties.LABEL];
-      const col  = risk?.color ?? '#859289';
-      return { color: col, weight: 1.5, opacity: 0.9, fillColor: col, fillOpacity: 0.18 };
+      const label = feature.properties.LABEL;
+      const col   = SPC_RISK[label]?.color ?? '#859289';
+      return { color: col, weight: 1.8, opacity: 0.9, fillColor: col, fillOpacity: label === 'TSTM' ? 0 : 0.16,
+               dashArray: OUTLOOK_DAY_DASH[day], className: 'spc-fill' };
     },
     onEachFeature(feature, lyr) {
       const p    = feature.properties;
@@ -1890,9 +2704,9 @@ async function loadSPC() {
       fetch(base + 'day2otlk_cat.nolyr.geojson', { signal: AbortSignal.timeout(10000) }).then(response => response.ok ? response.json() : null),
       fetch(base + 'day3otlk_cat.nolyr.geojson', { signal: AbortSignal.timeout(10000) }).then(response => response.ok ? response.json() : null),
     ]);
-    if (spcD1Layer) _buildSpcLayer(d1, spcD1Layer);
-    if (spcD2Layer) _buildSpcLayer(d2, spcD2Layer);
-    if (spcD3Layer) _buildSpcLayer(d3, spcD3Layer);
+    if (spcD1Layer) _buildSpcLayer(d1, spcD1Layer, 1);
+    if (spcD2Layer) _buildSpcLayer(d2, spcD2Layer, 2);
+    if (spcD3Layer) _buildSpcLayer(d3, spcD3Layer, 3);
   } catch (err) {
     console.warn('SPC outlook load failed:', err.message);
   }
@@ -1902,11 +2716,14 @@ async function loadSPC() {
    SPC FIRE WEATHER OUTLOOK — NOAA MapServer
 ══════════════════════════════════════════════════════ */
 
+// SPC fire weather colours (Critical is pure red in SPC's service; softened
+// slightly so it doesn't read as a tornado warning)
 const FWX_RISK = {
-  5:  { label: 'Elevated',           color: '#dbbc7f' },
-  8:  { label: 'Critical',           color: '#e69875' },
-  10: { label: 'Extremely Critical', color: '#e67e80' },
+  5:  { label: 'Elevated',           color: '#e69800' },
+  8:  { label: 'Critical',           color: '#ff4d4d' },
+  10: { label: 'Extremely Critical', color: '#e600a9' },
 };
+const FWX_DRY_COLOR = '#c98a4b';
 
 // Parse SPC's compact timestamp format: "202604051700" → ISO string
 function parseSpcTs(compact) {
@@ -1923,7 +2740,7 @@ async function _fetchFwxLayer(layerId) {
   return response.json();
 }
 
-function _buildFwxLayer(mainGJ, dryGJ, layer) {
+function _buildFwxLayer(mainGJ, dryGJ, layer, day) {
   layer.clearLayers();
 
   // Main categorical risk (Elevated / Critical / Extremely Critical)
@@ -1931,11 +2748,12 @@ function _buildFwxLayer(mainGJ, dryGJ, layer) {
     const features = [...mainGJ.features]
       .filter(feature => feature.properties.dn && FWX_RISK[feature.properties.dn])
       .sort((featA, featB) => (featA.properties.dn ?? 0) - (featB.properties.dn ?? 0));
-    L.geoJSON({ type: 'FeatureCollection', features }, {
+    casedGeoJSON({ type: 'FeatureCollection', features }, {
       style(feature) {
         const risk = FWX_RISK[feature.properties.dn];
         const col  = risk?.color ?? '#859289';
-        return { color: col, weight: 1.5, opacity: 0.9, fillColor: col, fillOpacity: 0.22 };
+        return { color: col, weight: 1.8, opacity: 0.9, fillColor: col, fillOpacity: 0.18,
+                 dashArray: OUTLOOK_DAY_DASH[day], className: 'fwx-fill' };
       },
       onEachFeature(feature, polygonLayer) {
         const props = feature.properties;
@@ -1953,9 +2771,9 @@ function _buildFwxLayer(mainGJ, dryGJ, layer) {
   if (dryGJ?.features?.length) {
     const dryFeatures = dryGJ.features.filter(feature => feature.geometry?.coordinates?.length);
     if (dryFeatures.length) {
-      L.geoJSON({ type: 'FeatureCollection', features: dryFeatures }, {
+      casedGeoJSON({ type: 'FeatureCollection', features: dryFeatures }, {
         style() {
-          return { color: '#d699b6', weight: 2, opacity: 0.85, dashArray: '6 4', fill: false };
+          return { color: FWX_DRY_COLOR, weight: 2, opacity: 0.9, dashArray: '1 5', lineCap: 'round', fill: false };
         },
         onEachFeature(feature, polygonLayer) {
           const props = feature.properties;
@@ -1978,8 +2796,8 @@ async function loadFireWx() {
       _fetchFwxLayer(4),
       _fetchFwxLayer(5),
     ]);
-    if (fwxD1Layer) _buildFwxLayer(d1main, d1dry, fwxD1Layer);
-    if (fwxD2Layer) _buildFwxLayer(d2main, d2dry, fwxD2Layer);
+    if (fwxD1Layer) _buildFwxLayer(d1main, d1dry, fwxD1Layer, 1);
+    if (fwxD2Layer) _buildFwxLayer(d2main, d2dry, fwxD2Layer, 2);
   } catch (err) {
     console.warn('Fire weather outlook load failed:', err.message);
   }
@@ -2068,11 +2886,12 @@ function plotGauges() {
 let droughtData = null;
 
 const DM_LEVELS = [
-  { dm:0, label:'D0 — Abnormally Dry',    color:'#dbbc7f', bg:'#3b3a27' },
-  { dm:1, label:'D1 — Moderate Drought',  color:'#e69875', bg:'#3d3226' },
-  { dm:2, label:'D2 — Severe Drought',    color:'#e67e80', bg:'#3d2b28' },
-  { dm:3, label:'D3 — Extreme Drought',   color:'#d699b6', bg:'#2e2538' },
-  { dm:4, label:'D4 — Exceptional Drought',color:'#a7c080',bg:'#293d2b' },
+  // Official USDM colours. D4's dark red gets a lighter outline (edge) to show on the dark map.
+  { dm:0, label:'D0 — Abnormally Dry',    color:'#ffff00', bg:'#3b3a1f' },
+  { dm:1, label:'D1 — Moderate Drought',  color:'#fcd37f', bg:'#3d3526' },
+  { dm:2, label:'D2 — Severe Drought',    color:'#ffaa00', bg:'#3d3020' },
+  { dm:3, label:'D3 — Extreme Drought',   color:'#e60000', bg:'#3d2222' },
+  { dm:4, label:'D4 — Exceptional Drought',color:'#730000', edge:'#c0392b', bg:'#331a1a' },
 ];
 
 async function loadDrought() {
@@ -2089,16 +2908,18 @@ function plotDrought() {
   droughtLayer.clearLayers();
 
   // Always populate the layer — toggleLayer() controls map visibility
-  const dmColors = { 0:'#dbbc7f', 1:'#e69875', 2:'#e67e80', 3:'#d699b6', 4:'#a7c080' };
-
-  L.geoJSON(droughtData, {
-    style: feature => ({
-      color:       dmColors[feature.properties?.DM] || '#859289',
-      weight:      0.5,
-      opacity:     0.6,
-      fillColor:   dmColors[feature.properties?.DM] || '#859289',
-      fillOpacity: 0.18
-    }),
+  casedGeoJSON(droughtData, {
+    style: feature => {
+      const level = DM_LEVELS.find(entry => entry.dm === feature.properties?.DM);
+      return {
+        color:       level?.edge || level?.color || '#859289',
+        weight:      1,
+        opacity:     0.85,
+        fillColor:   level?.color || '#859289',
+        fillOpacity: 0.22,
+        field:       true,
+      };
+    },
     onEachFeature: (feature, layer) => {
       const level = DM_LEVELS.find(entry => entry.dm === feature.properties?.DM);
       if (level) layer.bindPopup(`<div class="popup-inner">
@@ -2152,9 +2973,13 @@ function windColor(knots) {
  * the dark basemap and the bright ArcGIS satellite imagery, where a single
  * flat colour would disappear against clouds, snow, or desert.
  */
+// Barbs are monochrome, the meteorological convention: the glyph already
+// encodes speed, and colour stays free for alerts and categories drawn nearby.
+const WIND_BARB_COLOR = '#ece8dc';
+
 function windBarbIcon(knots, dirDeg) {
   const cx = 22, cy = 22, tipY = 5;
-  const color = windColor(knots);
+  const color = WIND_BARB_COLOR;
   let shapes = '';
 
   if (knots < 2 || dirDeg == null) {
@@ -2222,6 +3047,8 @@ async function loadWind(force = false) {
       const kmh   = props.WIND_SPEED;
       if (typeof kmh !== 'number' || kmh < 0 || kmh > WIND_MAX_KMH) return [];
       if (!props.OBS_DATETIME || now - props.OBS_DATETIME > WIND_MAX_AGE_MS) return [];
+      // The feed occasionally includes a station with no location
+      if (!Array.isArray(feature.geometry?.coordinates)) return [];
       const [lon, lat] = feature.geometry.coordinates;
       const dir = typeof props.WIND_DIRECT === 'number' ? props.WIND_DIRECT % 360 : null;
       return [{ lat, lon, knots: kmhToKt(kmh), dir, props, kind }];
@@ -2589,7 +3416,7 @@ function mscSeverity(alertType) {
   if (type.includes('warning'))  return { color: '#e67e80', label: 'Warning' };
   if (type.includes('watch'))    return { color: '#e69875', label: 'Watch' };
   if (type.includes('advisory')) return { color: '#dbbc7f', label: 'Advisory' };
-  return { color: '#7fbbb3', label: 'Statement' };
+  return { color: '#a9b1ab', label: 'Statement' };
 }
 
 // Title-case a lowercase MSC alert name ("air quality warning" → "Air Quality Warning")
@@ -2666,10 +3493,11 @@ function renderMSCPanel() {
 function plotMSC() {
   if (!map) return;
   mscLayer.clearLayers();
-  L.geoJSON({ type: 'FeatureCollection', features: mscData }, {
+  casedGeoJSON({ type: 'FeatureCollection', features: mscData }, {
     style(feature) {
       const severity = mscSeverity(feature.properties.alert_type);
-      return { color: severity.color, weight: 1, opacity: 0.8, fillColor: severity.color, fillOpacity: 0.12, dashArray: '3 4' };
+      return { color: severity.color, weight: 2, opacity: 0.9, fillColor: severity.color, fillOpacity: 0.12,
+               dashArray: ALERT_DASH[severity.label.toLowerCase()] };
     },
     onEachFeature(feature, layer) {
       const props    = feature.properties;
@@ -2693,16 +3521,14 @@ function plotMSC() {
 function flyToMSC(identifier) {
   ensureLayerOn('msc');
   if (!map || !identifier) return;
-  // mscLayer contains one L.geoJSON group; individual polygon layers are one level deeper
-  mscLayer.eachLayer(group => {
-    (group.eachLayer ? group : { eachLayer: visit => visit(group) }).eachLayer(polygonLayer => {
-      if (polygonLayer._mscId !== identifier) return;
-      try {
-        const bounds = polygonLayer.getBounds?.();
-        if (bounds?.isValid()) map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 8, duration: 1 });
-      } catch {}
-      polygonLayer.openPopup();
-    });
+  // Polygons sit inside the cased group, so search every level
+  eachLeafLayer(mscLayer, polygonLayer => {
+    if (polygonLayer._mscId !== identifier) return;
+    try {
+      const bounds = polygonLayer.getBounds?.();
+      if (bounds?.isValid()) map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 8, duration: 1 });
+    } catch {}
+    polygonLayer.openPopup();
   });
 }
 
@@ -2942,6 +3768,17 @@ async function loadGDACS() {
 function gdacsMarkerIcon(type, level) {
   const col = GDACS_COLOR[level] || '#859289';
   const lbl = (type || '?').slice(0, 2); // 2-char type code: TC, FL, DR…
+  // Green means "no significant impact expected": a small outline-only diamond,
+  // so dozens of green wildfire/flood notices don't bury Orange and Red alerts
+  if (level === 'Green') {
+    return L.divIcon({
+      html: `<div class="gdacs-minor"><div style="border-color:${col}"><span style="color:${col}">${lbl}</span></div></div>`,
+      className:   'leaflet-marker-emoji',
+      iconSize:    [24, 24],
+      iconAnchor:  [12, 12],
+      popupAnchor: [0, -13],
+    });
+  }
   return L.divIcon({
     html: `<div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center">
       <div style="width:23px;height:23px;background:${col};border:2px solid rgba(0,0,0,.55);transform:rotate(45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 7px rgba(0,0,0,.55)">
@@ -2962,7 +3799,10 @@ function plotGDACS() {
     const icon = GDACS_ICON[event.type]  || '⚠️';
     const lbl  = GDACS_LABEL[event.type] || event.type;
     const col  = GDACS_COLOR[event.level] || '#859289';
-    const marker = L.marker([event.lat, event.lon], { icon: gdacsMarkerIcon(event.type, event.level) });
+    const marker = L.marker([event.lat, event.lon], {
+      icon: gdacsMarkerIcon(event.type, event.level),
+      zIndexOffset: { Red: 200, Orange: 100 }[event.level] || 0,   // significant alerts on top
+    });
     marker._gdacsGuid = event.guid;
     marker.bindPopup(`<div class="popup-inner">
       <div class="popup-title">${icon} ${esc(event.name || lbl)}</div>
@@ -3015,11 +3855,13 @@ const HUR_CLASSES = [
 const HUR_WEAK = { label: 'Post-tropical / low', short: 'L', color: '#859289' };
 const hurClass = kt => HUR_CLASSES.find(cls => kt < cls.max);
 
+// NHC's own watch/warning colours: TS watch yellow, TS warning blue,
+// hurricane watch pink, hurricane warning red. Watches are also dashed.
 const HUR_WATCH = {
-  TWA: { label: 'Tropical Storm Watch',   color: '#dbbc7f', dash: '6 4' },
-  TWR: { label: 'Tropical Storm Warning', color: '#e69875', dash: null  },
-  HWA: { label: 'Hurricane Watch',        color: '#d699b6', dash: '6 4' },
-  HWR: { label: 'Hurricane Warning',      color: '#e67e80', dash: null  },
+  TWA: { label: 'Tropical Storm Watch',   color: '#f2d94e', dash: '9 6' },
+  TWR: { label: 'Tropical Storm Warning', color: '#4d8fe0', dash: null  },
+  HWA: { label: 'Hurricane Watch',        color: '#ff8fd8', dash: '9 6' },
+  HWR: { label: 'Hurricane Warning',      color: '#ff4d4d', dash: null  },
 };
 
 const hurAgency = basin => ['AL', 'EP', 'CP'].includes(basin) ? 'NHC' : 'JTWC';
@@ -3033,7 +3875,8 @@ function hurQuery(layerId, { simplify = false, where = '1=1' } = {}) {
   if (simplify) { params.set('maxAllowableOffset', '0.02'); params.set('geometryPrecision', '3'); }
   return fetch(`${HUR_BASE}/${layerId}/query?${params}`, { signal: AbortSignal.timeout(20000) })
     .then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
-    .then(payload => { if (payload.error) throw new Error(payload.error.message); return payload.features || []; });
+    .then(payload => { if (payload.error) throw new Error(payload.error.message); return payload.features || []; })
+    .then(features => features.filter(feature => feature.geometry?.coordinates));   // skip records with no location
 }
 
 /* ── Antimeridian ─────────────────────────────────────────────────
@@ -3133,8 +3976,8 @@ function plotHurricanes() {
   const { cone, obsTrack, fcstTrack, watches, obsPoints, fcstPoints } = hurData;
 
   // Cone first so tracks and points draw over it
-  L.geoJSON({ type: 'FeatureCollection', features: cone }, {
-    style: { color: '#d3c6aa', weight: 1.2, opacity: 0.9, fillColor: '#d3c6aa', fillOpacity: 0.07 },
+  casedGeoJSON({ type: 'FeatureCollection', features: cone }, {
+    style: { color: '#ffffff', weight: 1.4, opacity: 0.85, fillColor: '#ffffff', fillOpacity: 0.07 },
     onEachFeature: (feature, layer) => {
       const props = feature.properties;
       layer.bindPopup(`<div class="popup-inner">
@@ -3149,7 +3992,7 @@ function plotHurricanes() {
   }).addTo(hurLayer);
 
   // Coastal watches and warnings
-  L.geoJSON({ type: 'FeatureCollection', features: watches }, {
+  casedGeoJSON({ type: 'FeatureCollection', features: watches }, {
     style: feature => {
       const watch = HUR_WATCH[feature.properties.TCWW] || { color: '#dbbc7f', dash: null };
       return { color: watch.color, weight: 5, opacity: 0.95, dashArray: watch.dash, lineCap: 'butt' };
@@ -3469,18 +4312,15 @@ function plotMeteoalarm() {
     const col = METEO_SEV_COLOR[warning.severity] || '#859289';
     if (warning.coords) {
       // coords is an array of rings; L.polygon accepts [[ring1],[ring2],...] for multi-ring
-      const poly = L.polygon(warning.coords, {
-        color: col, weight: 1.5, opacity: 0.85,
-        fillColor: col, fillOpacity: 0.18,
+      const poly = casedPolygon(warning.coords, {
+        color: col, weight: 1.8, opacity: 0.9,
+        fillColor: col, fillOpacity: 0.15,
       });
       poly._meteoId = warning.id;
       poly.bindPopup(_meteoPopup(warning));
       meteoalarmLayer.addLayer(poly);
     } else if (warning.centLat != null) {
-      const marker = L.circleMarker([warning.centLat, warning.centLon], {
-        radius: 7, color: col, weight: 2, opacity: 0.9,
-        fillColor: col, fillOpacity: 0.35,
-      });
+      const marker = L.marker([warning.centLat, warning.centLon], { icon: alertBadgeIcon(col) });
       marker._meteoId = warning.id;
       marker.bindPopup(_meteoPopup(warning));
       meteoalarmLayer.addLayer(marker);
@@ -3717,14 +4557,12 @@ function plotWMO() {
     let layer;
     if (alert.geometry.type === 'Point') {
       const [lon, lat] = alert.geometry.coordinates;
-      layer = L.circleMarker([lat, lon], {
-        radius: 6, color: col, weight: 1.5, opacity: 0.9,
-        fillColor: col, fillOpacity: 0.4,
-      });
+      layer = L.marker([lat, lon], { icon: alertBadgeIcon(col) });
     } else {
       // L.geoJSON handles GeoJSON [lon,lat] → Leaflet [lat,lon] natively
-      layer = L.geoJSON(alert.geometry, {
-        style: { color: col, weight: 1.2, opacity: 0.8, fillColor: col, fillOpacity: 0.15 },
+      layer = casedGeoJSON(alert.geometry, {
+        style: { color: col, weight: 1.8, opacity: 0.9, fillColor: col, fillOpacity: 0.14,
+                 dashArray: ALERT_DASH[alertProductType(alert.event)] },
       });
     }
     const popup = `<div class="popup-inner">
