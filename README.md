@@ -33,7 +33,7 @@ overlays, with no build step and no backend beyond a tiny CORS relay.
 
 ## CORS relay
 
-Most sources serve CORS headers directly. Three do not (Meteoalarm, WMO SWIC), so requests to them go through
+Most sources serve CORS headers directly. Three do not (Meteoalarm, WMO, SWIC), so requests to them go through
 `cors-proxy-worker.js`, deployed as a Cloudflare Worker. 
 
 The worker accepts only `GET`/`HEAD` with a `?url=` parameter, allows only HTTPS targets whose hostname is on a fixed allowlist, forwards no cookies or credentials and strips them from responses, and adds CORS headers and a 20-second upstream timeout.
