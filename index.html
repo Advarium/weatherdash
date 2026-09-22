@@ -918,56 +918,6 @@
       </div>
     </div>
 
-    <!-- EAS Alerts -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">
-          EAS / NWS Alerts
-          <span class="badge" id="eas-count">—</span>
-        </div>
-        <div class="panel-controls">
-          <span class="updated" id="eas-updated">—</span>
-          <button class="btn-sm" onclick="loadAlerts()">⟳</button>
-        </div>
-      </div>
-      <div class="filter-bar">
-        <label>Sev:</label>
-        <select id="eas-sev" onchange="renderAlerts()">
-          <option value="all">All</option>
-          <option value="Extreme">Extreme</option>
-          <option value="Severe">Severe</option>
-          <option value="Moderate">Moderate</option>
-        </select>
-        <label>State:</label>
-        <select id="eas-region" onchange="loadAlerts()">
-          <option value="">All US</option>
-          <option value="area=AL">Alabama</option><option value="area=AK">Alaska</option>
-          <option value="area=AZ">Arizona</option><option value="area=AR">Arkansas</option>
-          <option value="area=CA">California</option><option value="area=CO">Colorado</option>
-          <option value="area=FL">Florida</option><option value="area=GA">Georgia</option>
-          <option value="area=HI">Hawaii</option><option value="area=IL">Illinois</option>
-          <option value="area=IN">Indiana</option><option value="area=KS">Kansas</option>
-          <option value="area=KY">Kentucky</option><option value="area=LA">Louisiana</option>
-          <option value="area=MI">Michigan</option><option value="area=MN">Minnesota</option>
-          <option value="area=MS">Mississippi</option><option value="area=MO">Missouri</option>
-          <option value="area=MT">Montana</option><option value="area=NE">Nebraska</option>
-          <option value="area=NV">Nevada</option><option value="area=NJ">New Jersey</option>
-          <option value="area=NM">New Mexico</option><option value="area=NY">New York</option>
-          <option value="area=NC">North Carolina</option><option value="area=ND">North Dakota</option>
-          <option value="area=OH">Ohio</option><option value="area=OK">Oklahoma</option>
-          <option value="area=OR">Oregon</option><option value="area=PA">Pennsylvania</option>
-          <option value="area=SC">South Carolina</option><option value="area=SD">South Dakota</option>
-          <option value="area=TN">Tennessee</option><option value="area=TX">Texas</option>
-          <option value="area=UT">Utah</option><option value="area=VA">Virginia</option>
-          <option value="area=WA">Washington</option><option value="area=WV">West Virginia</option>
-          <option value="area=WI">Wisconsin</option><option value="area=WY">Wyoming</option>
-        </select>
-      </div>
-      <div class="panel-body" id="eas-body">
-        <div class="state"><div class="spinner"></div></div>
-      </div>
-    </div>
-
     <!-- FEMA Disaster Declarations -->
     <div class="panel">
       <div class="panel-header">
@@ -1010,6 +960,27 @@
       <div class="panel-body" id="vhp-body">
         <div class="state"><div class="spinner"></div></div>
       </div>
+    </div>
+
+    <!-- NWS / EAS alerts by state: this bar spans the grid, and
+         renderStatePanels() fills region labels + one panel per state below it -->
+    <div class="nws-states-bar">
+      <div class="nws-states-title">
+        NWS Alerts by State
+        <span class="badge" id="eas-count">—</span>
+      </div>
+      <label for="eas-sev">Sev:</label>
+      <select id="eas-sev" onchange="renderAlerts()">
+        <option value="all">All</option>
+        <option value="Extreme">Extreme</option>
+        <option value="Severe">Severe</option>
+        <option value="Moderate">Moderate</option>
+      </select>
+      <span class="updated" id="eas-updated">—</span>
+      <button class="btn-sm" onclick="loadAlerts()">⟳</button>
+    </div>
+    <div class="geo-panels-container" id="geo-us-state-panels">
+      <div class="nws-states-msg"><div class="state"><div class="spinner"></div></div></div>
     </div>
 
     </div><!-- /geo-section-us -->

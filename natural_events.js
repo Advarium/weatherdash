@@ -1027,12 +1027,129 @@ function flyToEq(id) {
 
 let easData = [];
 
+/* ── NWS alerts by state ───────────────────────────────────────────
+   Every alert lists UGC zone codes ("ARC031", "OHZ045"); the first two
+   letters are the state, or a marine area for coastal/offshore waters and
+   the Great Lakes. An alert spanning several states appears in each of
+   them, with its area text trimmed to that state's counties. */
+const US_STATE_NAMES = {
+  AL:'Alabama', AK:'Alaska', AZ:'Arizona', AR:'Arkansas', CA:'California', CO:'Colorado',
+  CT:'Connecticut', DE:'Delaware', DC:'District of Columbia', FL:'Florida', GA:'Georgia',
+  HI:'Hawaii', ID:'Idaho', IL:'Illinois', IN:'Indiana', IA:'Iowa', KS:'Kansas', KY:'Kentucky',
+  LA:'Louisiana', ME:'Maine', MD:'Maryland', MA:'Massachusetts', MI:'Michigan', MN:'Minnesota',
+  MS:'Mississippi', MO:'Missouri', MT:'Montana', NE:'Nebraska', NV:'Nevada', NH:'New Hampshire',
+  NJ:'New Jersey', NM:'New Mexico', NY:'New York', NC:'North Carolina', ND:'North Dakota',
+  OH:'Ohio', OK:'Oklahoma', OR:'Oregon', PA:'Pennsylvania', RI:'Rhode Island',
+  SC:'South Carolina', SD:'South Dakota', TN:'Tennessee', TX:'Texas', UT:'Utah', VT:'Vermont',
+  VA:'Virginia', WA:'Washington', WV:'West Virginia', WI:'Wisconsin', WY:'Wyoming',
+  PR:'Puerto Rico', VI:'U.S. Virgin Islands', GU:'Guam', AS:'American Samoa', MP:'Northern Mariana Islands',
+};
+
+// Marine UGC prefixes → the water body panel they are listed under
+const US_MARINE_AREAS = {
+  AN:'Atlantic Coast', AM:'Atlantic Coast', GM:'Gulf Coast', PZ:'Pacific Coast',
+  PK:'Alaska Waters', PH:'Hawaii Waters', PM:'Western Pacific', PS:'Western Pacific',
+  LM:'Great Lakes', LS:'Great Lakes', LH:'Great Lakes', LE:'Great Lakes', LO:'Great Lakes',
+  LC:'Great Lakes', SL:'Great Lakes',
+};
+
+const US_REGIONS = {
+  'Northeast':     ['CT','DC','DE','MA','MD','ME','NH','NJ','NY','PA','RI','VT'],
+  'Southeast':     ['AL','FL','GA','KY','MS','NC','SC','TN','VA','WV'],
+  'Midwest':       ['IA','IL','IN','KS','MI','MN','MO','ND','NE','OH','SD','WI'],
+  'South Central': ['AR','LA','OK','TX'],
+  'Mountain West': ['AZ','CO','ID','MT','NM','NV','UT','WY'],
+  'Pacific':       ['AK','CA','HI','OR','WA'],
+  'Territories':   ['AS','GU','MP','PR','VI'],
+  'Marine':        [...new Set(Object.values(US_MARINE_AREAS))],
+};
+
+const NWS_SEV_COLOR = { Extreme:'#e67e80', Severe:'#e69875', Moderate:'#dbbc7f' };
+const NWS_SEV_RANK  = { Extreme:3, Severe:2, Moderate:1 };
+
+// Panel key for a UGC code: its state code, or its marine area name
+const nwsUgcKey = ugc => US_MARINE_AREAS[ugc.slice(0, 2)] || ugc.slice(0, 2);
+
+// Panel keys an alert belongs to
+function nwsAlertAreas(props) {
+  return new Set((props.geocode?.UGC || []).map(nwsUgcKey));
+}
+
+/* The areaDesc parts for one panel. areaDesc lists one name per UGC code in
+   the same order ("Craighead, AR; Hancock, WV" ↔ ARC031, WVC029), so parts are
+   matched by position; zone names carry no state suffix ("Suffolk"), so the
+   ", XX" suffix is only a fallback if the counts ever differ. */
+function nwsAreaFor(props, key) {
+  const parts = (props.areaDesc || '').split(';').map(part => part.trim()).filter(Boolean);
+  const ugcs  = props.geocode?.UGC || [];
+  let mine = [];
+  if (parts.length === ugcs.length) mine = parts.filter((part, idx) => nwsUgcKey(ugcs[idx]) === key);
+  else if (US_STATE_NAMES[key])     mine = parts.filter(part => part.endsWith(`, ${key}`));
+  return (mine.length ? mine : parts).join('; ');
+}
+
+function renderStatePanels(alerts) {
+  const container = document.getElementById('geo-us-state-panels');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!alerts.length) {
+    container.innerHTML = `<div class="nws-states-msg"><div class="all-clear">✅ No active alerts.</div></div>`;
+    return;
+  }
+
+  // Panel key → alerts, preserving easData's severity order
+  const byArea = {};
+  for (const alert of alerts) {
+    const props = alert.properties || alert;
+    for (const key of nwsAlertAreas(props)) {
+      (byArea[key] ||= []).push({
+        id:       alert.id,
+        source:   'nws',
+        title:    props.event || 'Unknown Alert',
+        severity: props.severity || 'Unknown',
+        _sevRank: NWS_SEV_RANK[props.severity] ?? 0,
+        color:    NWS_SEV_COLOR[props.severity] || '#859289',
+        areaDesc: nwsAreaFor(props, key),
+        onset:    props.sent || props.effective || '',
+        expires:  props.expires || props.ends || '',
+        flyFn:    `flyToAlert('${String(alert.id).replace(/'/g, "\\'")}')`,
+      });
+    }
+  }
+
+  const regions = Object.entries(US_REGIONS);
+  // Anything unrecognised (a new marine prefix, say) still gets shown
+  const unknown = Object.keys(byArea).filter(key => !regions.some(([, keys]) => keys.includes(key)));
+  if (unknown.length) regions.push(['Other', unknown]);
+
+  for (const [region, keys] of regions) {
+    const panels = keys.filter(key => byArea[key]).sort((keyA, keyB) =>
+      byArea[keyB][0]._sevRank - byArea[keyA][0]._sevRank || byArea[keyB].length - byArea[keyA].length);
+    if (!panels.length) continue;
+
+    const srId = `geo-sr-us-${region.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+    const collapsed = _collapsedSubregions.has(srId);
+    const lbl = document.createElement('div');
+    lbl.className = 'geo-subregion-label' + (collapsed ? ' collapsed' : '');
+    lbl.innerHTML = `${esc(region)}<span class="geo-sr-chevron">▾</span>`;
+    lbl.onclick = () => toggleSubregion(srId, lbl);
+    container.appendChild(lbl);
+
+    const srSection = document.createElement('div');
+    srSection.className = 'geo-section' + (collapsed ? ' collapsed' : '');
+    srSection.id = srId;
+    container.appendChild(srSection);
+
+    for (const key of panels) {
+      srSection.appendChild(buildCountryPanel(key, byArea[key], { label: US_STATE_NAMES[key] || key, showSources: false }));
+    }
+  }
+}
+
 async function loadAlerts() {
-  showLoading('eas-body');
-  const region = document.getElementById('eas-region').value;
   const sevParam = 'severity=Extreme,Severe,Moderate';
-  const base = 'https://api.weather.gov/alerts/active';
-  const url  = region ? `${base}?${region}&${sevParam}` : `${base}?${sevParam}`;
+  const url = `https://api.weather.gov/alerts/active?${sevParam}`;
 
   try {
     const response = await fetch(url, { headers:{ 'Accept':'application/geo+json' } });
@@ -1046,12 +1163,12 @@ async function loadAlerts() {
     markUpdated('eas-updated');
     renderAlerts();
   } catch (err) {
-    showState('eas-body','⚠️',`Failed: ${err.message}`);
+    // Keep the last good panels on a failed refresh; only fill an empty section
+    const container = document.getElementById('geo-us-state-panels');
+    if (container && !easData.length) {
+      container.innerHTML = `<div class="nws-states-msg"><div class="state"><span style="font-size:22px">⚠️</span><span>NWS alerts failed: ${esc(err.message)}</span></div></div>`;
+    }
   }
-}
-
-function sevClass(severity) {
-  return { Extreme:'sev-extreme', Severe:'sev-severe', Moderate:'sev-moderate' }[severity] || 'sev-unknown';
 }
 
 function renderAlerts() {
@@ -1062,39 +1179,7 @@ function renderAlerts() {
   });
 
   document.getElementById('eas-count').textContent = filtered.length;
-
-  if (!filtered.length) {
-    document.getElementById('eas-body').innerHTML =
-      `<div class="all-clear">✅ No active alerts.</div>`;
-    plotAlerts();
-    return;
-  }
-
-  let html = '<div class="alert-list">';
-  for (const alert of filtered) {
-    const props = alert.properties || alert;
-    const evt  = props.event || 'Unknown Alert';
-    const sev  = props.severity || 'Unknown';
-    const area = props.areaDesc || '';
-    const sent = props.sent || props.effective || '';
-    const exp  = props.expires || props.ends || '';
-    const url  = props['@id'] || props.id || '';
-
-    html += `<div class="alert-item" onclick="flyToAlert('${alert.id}')" title="Click to locate on map">
-      <div class="alert-top">
-        <span class="alert-event">${esc(evt)}</span>
-        <span class="sev-tag ${sevClass(sev)}">${esc(sev)}</span>
-      </div>
-      ${area ? `<div class="alert-area" title="${esc(area)}">${esc(area)}</div>` : ''}
-      <div class="alert-times">
-        ${sent ? `<span><b>Issued:</b> ${fmtTime(sent)}</span>` : ''}
-        ${exp  ? `<span><b>Exp:</b> ${fmtTime(exp)}</span>` : ''}
-        ${url  ? `<span><a class="link-btn" href="${esc(url)}" target="_blank" rel="noopener">Bulletin ↗</a></span>` : ''}
-      </div>
-    </div>`;
-  }
-  html += '</div>';
-  document.getElementById('eas-body').innerHTML = html;
+  renderStatePanels(filtered);
   plotAlerts();
   buildGlobalSummary();
 
@@ -3520,12 +3605,14 @@ const GEO_GROUP_DOM = {
 };
 
 /* ── Build a single country panel element ────────────────────────── */
-function buildCountryPanel(country, alerts) {
-  const label    = country.replace(/-/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+// options.label overrides the slug-derived title; options.showSources = false
+// drops the source tags (US state panels are all NWS, so they add nothing)
+function buildCountryPanel(country, alerts, { label, showSources = true } = {}) {
+  label ??= country.replace(/-/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
   const topAlert = alerts[0];
 
   // Unique sources for header badges
-  const uniqSources = [...new Set(alerts.map(alert => alert.source))];
+  const uniqSources = showSources ? [...new Set(alerts.map(alert => alert.source))] : [];
   const sourceTags  = uniqSources.map(sourceId => {
     const style = GEO_SOURCE_STYLE[sourceId] || { bg: 'rgba(255,255,255,0.08)', color: 'var(--muted)', label: sourceId.slice(0,3).toUpperCase() };
     return `<span class="geo-source-tag" style="background:${style.bg};color:${style.color}">${style.label}</span>`;
@@ -3540,7 +3627,7 @@ function buildCountryPanel(country, alerts) {
       <div class="alert-row">
         <span class="alert-badge" style="background:${alert.color};color:var(--badge-text)">${esc(alert.severity)}</span>
         <span class="alert-event">${esc(alert.title)}</span>
-        <span class="geo-source-tag" style="background:${sourceStyle.bg};color:${sourceStyle.color}">${sourceStyle.label}</span>
+        ${showSources ? `<span class="geo-source-tag" style="background:${sourceStyle.bg};color:${sourceStyle.color}">${sourceStyle.label}</span>` : ''}
       </div>
       ${alert.areaDesc ? `<div class="alert-sub">${esc(alert.areaDesc)}</div>` : ''}
       ${alert.certainty && alert.certainty !== 'Observed'
