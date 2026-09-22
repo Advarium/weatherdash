@@ -185,7 +185,8 @@ const fieldKeys = () => [...COLOUR_FIELDS, ...(irStyle === 'enhanced' ? IR_KEYS 
    can't be read. Layers in the same set here can share the map because they
    don't overlap or were designed to stack (regional radars; ice over SST). */
 const FIELD_COMPATIBLE = [['radar', 'dwd-radar', 'fmi-radar'], ['sst', 'seaice'], IR_KEYS];
-const LAYER_NAMES = key => document.querySelector(`#toggle-${key} ~ .layer-name`)?.textContent || key;
+// The layer's name without its region line
+const LAYER_NAMES = key => document.querySelector(`#toggle-${key} ~ .layer-name`)?.firstChild?.textContent.trim() || key;
 
 function enforceSingleField(turnedOn, label = LAYER_NAMES(turnedOn)) {
   if (!isColourField(turnedOn)) return;

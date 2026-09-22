@@ -1646,7 +1646,14 @@
     /* Symbol drawn like the layer's own map symbol */
     .layer-sym { width: 16px; height: 16px; flex-shrink: 0; overflow: visible; }
     .layer-name { flex: 1; min-width: 0; line-height: 1.25; }
-    /* Region the layer covers */
+    /* Region a layer covers (omitted for global layers), on its own line under the name */
+    .layer-region {
+      display: block;
+      font-size: 9.5px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-top: 1px;
+    }
     .layer-tag {
       flex-shrink: 0;
       font-size: 8.5px;
