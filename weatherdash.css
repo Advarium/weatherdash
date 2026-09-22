@@ -2413,3 +2413,8 @@
     /* Group-level option row (e.g. infrared style) */
     .group-option { margin: 2px 0 4px; }
     .group-option-label { flex: 1; font-size: 11px; color: var(--muted); }
+
+    /* Wind barbs: only the glyph takes clicks (see windBarbIcon) */
+    .leaflet-marker-icon.wind-barb-icon,
+    .leaflet-marker-icon.wind-barb-icon svg { pointer-events: none !important; cursor: grab; }
+    .wind-barb-icon .barb-hit { pointer-events: all; cursor: pointer; }

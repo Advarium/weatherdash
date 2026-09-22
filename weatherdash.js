@@ -1065,13 +1065,36 @@ function initMap() {
 
     const pad     = 8;
     const mapRect = map.getContainer().getBoundingClientRect();
+    // Never taller than the map: long popups scroll inside
+    const content = popupEl.querySelector('.leaflet-popup-content');
+    if (content) { content.style.maxHeight = `${Math.max(120, mapRect.height - 60)}px`; content.style.overflowY = 'auto'; }
     const boxRect = box.getBoundingClientRect();
     let shift = 0;
     if (boxRect.left < mapRect.left + pad)        shift = mapRect.left + pad - boxRect.left;
     else if (boxRect.right > mapRect.right - pad) shift = mapRect.right - pad - boxRect.right;
     // The tip only stays attached while it sits under the box, clear of the rounded corners
     if (tip && Math.abs(shift) > boxRect.width / 2 - 24) tip.style.visibility = 'hidden';
-    if (shift) parts.forEach(el => { el.style.transform = `translateX(${Math.round(shift)}px)`; });
+
+    /* Same problem vertically: near the map's north edge, maxBounds stops the
+       map from panning down far enough for a tall popup. Open it below the
+       marker instead; if it fits neither way, pin it inside the map. */
+    let dy = 0;
+    if (boxRect.top < mapRect.top + pad) {
+      const anchorY = (tip || box).getBoundingClientRect().bottom;   // where the tip points
+      const source  = map._popup._source;
+      let below = 10;                                                 // clear the clicked point
+      if (source instanceof L.Marker) {
+        const icon = source.options.icon.options;
+        const size = L.point(icon.iconSize || [12, 12]), anchor = L.point(icon.iconAnchor || [size.x / 2, size.y / 2]);
+        below = -(icon.popupAnchor?.[1] || 0) + (size.y - anchor.y) + 6;
+      }
+      const flippedTop = anchorY + below;
+      dy = flippedTop + boxRect.height <= mapRect.bottom - pad
+        ? flippedTop - boxRect.top                    // fits below the marker
+        : mapRect.top + pad - boxRect.top;            // fits nowhere: pin to the top and scroll
+      if (tip) tip.style.visibility = 'hidden';
+    }
+    if (shift || dy) parts.forEach(el => { el.style.transform = `translate(${Math.round(shift)}px, ${Math.round(dy)}px)`; });
   }
   map.on('popupopen moveend zoomend resize', _fitPopupInMap);
 
@@ -3026,17 +3049,27 @@ function windBarbIcon(knots, dirDeg) {
     `<g stroke="${stroke}" stroke-width="${width}" fill="${fill}" ` +
     `stroke-linecap="round" stroke-linejoin="round">${shapes}</g>`;
 
+  /* Only the glyph is clickable: the 44 px box ignores the pointer (CSS on
+     .wind-barb-icon) and an invisible 9 px-wide copy of the strokes, rotated
+     with the barb, takes the clicks. Clicks and double-clicks elsewhere in the
+     box reach whatever lies underneath (storm reports, alert areas, the map). */
+  const calm = knots < 2 || dirDeg == null;
+  const hit = calm
+    ? `<circle class="barb-hit" cx="${cx}" cy="${cy}" r="7" fill="transparent" stroke="transparent" stroke-width="3"/>`
+    : `<g class="barb-hit" stroke="transparent" stroke-width="9" fill="transparent" stroke-linecap="round" stroke-linejoin="round">${shapes}</g>`;
+
   const html =
     `<svg width="44" height="44" viewBox="0 0 44 44" style="overflow:visible">` +
       `<g transform="rotate(${dirDeg ?? 0} ${cx} ${cy})">` +
         g('rgba(0,0,0,0.85)', 4.0, 'rgba(0,0,0,0.85)') +   // halo
         g(color, 1.6, color) +                             // glyph
+        hit +
       `</g>` +
     `</svg>`;
 
   return L.divIcon({
     html,
-    className:  'leaflet-marker-emoji',
+    className:  'leaflet-marker-emoji wind-barb-icon',
     iconSize:   [44, 44],
     iconAnchor: [22, 22],
     popupAnchor:[0, -16],
@@ -3131,6 +3164,10 @@ function windPopupHtml(obs, hiddenNearby) {
   const title  = isBuoy ? `🌊 Buoy ${esc(props.STATIONID)}`
                         : `💨 ${esc(props.STATION_NAME || props.ICAO)}${props.ICAO ? ` <span style="opacity:.6">${esc(props.ICAO)}</span>` : ''}`;
   const sub    = isBuoy ? 'NDBC moored buoy' : esc(props.COUNTRY || '');
+  // "Few Clouds at 270 meters AGL, Overcast Cloud Deck at 580 meters AGL" → "Few 270 m · Overcast 580 m"
+  const sky = props.SKY_CONDTN ? props.SKY_CONDTN.split(/,\s*/).map(layer => layer
+      .replace(/\s*Cloud(s| Deck)?\s*/i, ' ').replace(/\s*at\s+(\d+)\s*meters?\s*AGL/i, ' $1 m').replace(/\s+/g, ' ').trim())
+      .join(' · ') : null;
   const vis    = typeof props.VISIBILITY === 'number' && props.VISIBILITY > 0
     ? `${props.VISIBILITY >= 16000 ? '16+' : (props.VISIBILITY / 1000).toFixed(1)} km` : null;
   return `<div class="popup-inner">
@@ -3140,13 +3177,12 @@ function windPopupHtml(obs, hiddenNearby) {
     ${row('Wind', wind)}
     ${row('Gusts', kt(props.WIND_GUST))}
     ${row('Temperature', temp(isBuoy ? props.AIR_TEMP : props.TEMP))}
-    ${row('Dew point', temp(isBuoy ? props.DEWPOINT_TEMP : props.DEW_POINT))}
-    ${isBuoy ? row('Water', temp(props.WATER_TEMP)) : row('Humidity', typeof props.R_HUMIDITY === 'number' ? `${props.R_HUMIDITY}%` : null)}
+    ${row('Dew point', [temp(isBuoy ? props.DEWPOINT_TEMP : props.DEW_POINT), !isBuoy && typeof props.R_HUMIDITY === 'number' ? `${props.R_HUMIDITY}% RH` : null].filter(Boolean).join(' · ') || null)}
+    ${isBuoy ? row('Water', temp(props.WATER_TEMP)) : ''}
     ${isBuoy && typeof props.WAVE_HEIGHT === 'number' ? row('Waves', `${props.WAVE_HEIGHT} m${props.DOM_WAVE_PERIOD ? ` every ${props.DOM_WAVE_PERIOD} s` : ''}`) : ''}
     ${row('Pressure', typeof (isBuoy ? props.ATM_PRESSURE : props.PRESSURE) === 'number' ? `${(isBuoy ? props.ATM_PRESSURE : props.PRESSURE).toFixed(1)} hPa` : null)}
-    ${row('Visibility', vis)}
-    ${isBuoy ? '' : row('Sky', props.SKY_CONDTN ? esc(props.SKY_CONDTN) : null)}
-    ${isBuoy ? '' : row('Flight category', props.FLT_CATEGORY ? esc(props.FLT_CATEGORY) : null)}
+    ${row('Visibility', [vis, !isBuoy && props.FLT_CATEGORY ? esc(props.FLT_CATEGORY) : null].filter(Boolean).join(' · ') || null)}
+    ${isBuoy ? '' : row('Sky', sky ? esc(sky) : null)}
     ${hiddenNearby > 0 ? `<div class="popup-row" style="font-size:10px;color:var(--muted)">+${hiddenNearby} nearby station${hiddenNearby === 1 ? '' : 's'}, zoom in to see</div>` : ''}
     <div class="popup-row" style="font-size:10px;color:var(--muted)">Barb points into the wind · observed ${isBuoy ? 'at the buoy' : 'at 10 m'}</div>
   </div>`;
