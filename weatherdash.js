@@ -4894,7 +4894,7 @@ function normalizeWMO(data) {
     centLat:  alert.centLat,
     centLon:  alert.centLon,
     certainty: WMO_CERTAINTY[alert.certainty] || null,
-    flyFn:    alert.centLat != null ? `flyToWMO('${alert.id.replace(/'/g,"\\'")}')` : null,
+    flyFn:    alert.centLat != null ? `flyToWMO('${alert.id.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}')` : null,
   }));
 }
 
