@@ -8,7 +8,7 @@ overlays, with no build step and no backend beyond a tiny CORS relay.
 
 ## Features
 
-- **Interactive Leaflet map** with Esri dark and satellite basemaps, 34
+- **Interactive Leaflet map** with Esri dark and satellite basemaps, 35
   toggleable overlays, and click-to-locate from every sidebar row.
 - **Cross-source alert index.** European (Meteoalarm), global (WMO, GDACS)
   and regional alerts are normalized into one store and rendered as
@@ -73,7 +73,7 @@ redistribution.
 | [MSC GeoMet](https://api.weather.gc.ca/) | Canadian weather alerts | Environment and Climate Change Canada | [Data Servers End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) |
 | [GDACS](https://www.gdacs.org/) | Global disaster alerts (RSS), and modelled tsunami wave height for earthquakes (event API) | European Commission Joint Research Centre | GDACS [terms](https://www.gdacs.org/About/termofuse.aspx) |
 | [Meteoalarm](https://meteoalarm.org/) | Severe weather warnings for 39 European countries (CAP feeds) | EUMETNET | Attribution required; see [Meteoalarm terms](https://meteoalarm.org/en/live/page/terms-and-conditions) |
-| [WMO SWIC](https://severeweather.wmo.int/) | Global severe weather alerts (WFS) | World Meteorological Organization, hosted by Hong Kong Observatory | WMO [terms](https://severeweather.wmo.int/) |
+| [WMO SWIC](https://severeweather.wmo.int/) | Global severe weather alerts (WFS), including Australian warnings issued by the Bureau of Meteorology | World Meteorological Organization, hosted by Hong Kong Observatory; Australian warnings © Bureau of Meteorology | WMO [terms](https://severeweather.wmo.int/) |
 | [Active Hurricanes, Cyclones and Typhoons](https://www.arcgis.com/home/item.html?id=248e7b5827a34b248647afb012c58787) | Tropical cyclone tracks, forecast cones, coastal watches and warnings, 5-day wind speed probabilities (ArcGIS feature service) | NOAA National Hurricane Center and Joint Typhoon Warning Center, compiled by Esri Living Atlas | Esri [Master License Agreement](https://www.esri.com/en-us/legal/terms/full-master-agreement); underlying NHC data is US Government work, public domain |
 
 ### Weather, ocean and climate overlays
@@ -81,7 +81,7 @@ redistribution.
 | Source | Layer | Provider | Terms |
 |---|---|---|---|
 | [Current Weather and Wind Station Data](https://www.arcgis.com/home/item.html?id=cb1886ff0a9d4156ba4d2fadd7e8a139) | Surface wind barbs and station observations (METAR stations and NDBC buoys, ArcGIS feature service) | NOAA Aviation Weather Center and National Data Buoy Center, compiled by Esri Living Atlas | Esri [Master License Agreement](https://www.esri.com/en-us/legal/terms/full-master-agreement); underlying NOAA data is US Government work, public domain |
-| [RainViewer](https://www.rainviewer.com/) | Global radar composite tiles | RainViewer | Free tier with attribution; see [API terms](https://www.rainviewer.com/api.html) |
+| [RainViewer](https://www.rainviewer.com/) | Global radar composite tiles | RainViewer | Free for personal or educational use, with attribution and a link to RainViewer; see [API terms](https://www.rainviewer.com/api.html) |
 | [Iowa State IEM](https://mesonet.agron.iastate.edu/) | NEXRAD composite reflectivity (CONUS) | Iowa Environmental Mesonet | Free service, attribution requested, provided on map |
 | [DWD GeoServer](https://maps.dwd.de/) | German radar composite (WMS) | Deutscher Wetterdienst | [DWD open data](https://www.dwd.de/EN/service/copyright/copyright_node.html), attribution required, provided on map |
 | [FMI Open Data](https://en.ilmatieteenlaitos.fi/open-data) | Finnish radar composite (WMS) | Finnish Meteorological Institute | [CC BY 4.0](https://en.ilmatieteenlaitos.fi/open-data-licence) |
@@ -93,7 +93,7 @@ redistribution.
 | Source | Used for | Terms |
 |---|---|---|
 | [Esri World Dark Gray Base](https://www.arcgis.com/home/item.html?id=1970c1995b8f44749f4b9b6e81b5ba45) and [World Imagery](https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9), with the World Dark Gray Reference and World Boundaries and Places label layers | Basemap tiles and place-name labels | Esri [Terms of Use](https://www.esri.com/en-us/legal/terms/full-master-agreement); attribution to Esri and its data partners is shown on the map |
-| [OpenStreetMap](https://www.openstreetmap.org/copyright) | Data underlying the Esri dark basemap and Photon | © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/) |
+| [OpenStreetMap](https://www.openstreetmap.org/copyright) | Data underlying the Esri dark basemap, both Esri label layers, and Photon | © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/) |
 | [Photon](https://photon.komoot.io/) | Address and place search | komoot, Apache 2.0; public instance for fair use |
 | [Leaflet](https://leafletjs.com/) 1.9.4 | Map rendering | BSD 2-Clause |
 | [Google Fonts](https://fonts.google.com/) | Theme typefaces (Barlow Condensed, DM Sans, Fira Code, IBM Plex Mono, IBM Plex Sans, Inter, Orbitron, Share Tech Mono, Sora, Space Grotesk, VT323) | SIL Open Font License |
