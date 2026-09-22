@@ -618,11 +618,16 @@
         <details class="mls-section">
           <summary><span>RainViewer</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">RainViewer global radar composite (color scheme 6, NEXRAD-style). Aggregates ground-based radar networks worldwide. Updated every ~10 minutes.</div>
-            <div class="mls-sub">Reflectivity (dBZ)</div>
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,transparent 0%,#40b8d8 12%,#00c000 28%,#ffff00 48%,#ff7800 65%,#ff0000 80%,#cc00cc 100%)"></div>
+            <div class="mls-desc">RainViewer global radar composite. Aggregates ground-based radar networks worldwide. Updated every ~10 minutes. RainViewer's free API serves one palette, Universal Blue (scheme 2), in which blue rather than green marks light rain.</div>
+            <!-- Stops from RainViewer's published Universal Blue table, placed at (dBZ − 5) / 60
+                 so they line up with the 5–65 dBZ labels. Colours step at 15/35/45/55/65. -->
+            <div class="mls-sub">Rain reflectivity (dBZ)</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(146,136,113,.4) 0%,rgba(222,208,151,.75) 15%,#88ddee 15%,#00a3e0 25%,#0077aa 33.3%,#005588 41.7%,#004768 48.3%,#ffee00 50%,#ffaa00 58.3%,#ff8100 65%,#ff4400 66.7%,#c10000 75%,#5d0000 81.7%,#ffaaff 83.3%,#ff4eff 98.3%,#ffffff 98.3%)"></div>
             <div class="mls-scale-labels"><span>&lt;5</span><span>20</span><span>35</span><span>50</span><span>65+ dBZ</span></div>
-            <div class="mls-note">Drizzle ~5–15 · Rain 20–40 · Heavy rain 40–55 · Hail 55+</div>
+            <div class="mls-note">Drizzle &lt;15 (tan) · Light–moderate rain 15–35 (blues) · Heavy 35–45 (yellow–orange) · Very heavy 45–55 (reds) · Hail 55+ (pink, white)</div>
+            <div class="mls-sub">Snow reflectivity (dBZ)</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(195,255,255,.75) 0%,#bfffff 8.3%,#7fbfff 25%,#3f7fff 50%,#0f4fff 75%,#001fff 100%)"></div>
+            <div class="mls-scale-labels"><span>&lt;5</span><span>20</span><span>35</span><span>50</span><span>65+ dBZ</span></div>
           </div>
         </details>
 

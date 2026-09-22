@@ -621,7 +621,10 @@ async function loadRainviewer() {
     if (!frames.length) return;
     const latest = frames[frames.length - 1];
     const host   = payload.host || 'https://tilecache.rainviewer.com';
-    const tileUrl = `${host}${latest.path}/256/{z}/{x}/{y}/6/1_1.png`;
+    // Colour scheme 2 (Universal Blue): the free API ignores this value and
+    // always serves scheme 2, so request it explicitly to match the legend.
+    // "1_1" = smoothed, with snow shown in its own colours.
+    const tileUrl = `${host}${latest.path}/256/{z}/{x}/{y}/2/1_1.png`;
 
     const wasOnMap = rainviewerLayer && map.hasLayer(rainviewerLayer);
     if (rainviewerLayer) map.removeLayer(rainviewerLayer);
