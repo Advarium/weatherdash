@@ -187,53 +187,42 @@
       <!-- Scrollable layer groups -->
       <div class="mls-body">
 
-        <!-- ── Global ───────────────────────────────── -->
-        <details class="mls-section" open>
-          <summary><span>🌐 Global</span><span class="mls-chevron">▾</span></summary>
+        <!-- ── Scenes: one click sets a tested combination of layers ── -->
+        <div class="scene-bar" role="group" aria-label="Layer scenes">
+          <div class="scene-bar-title">Scenes</div>
+          <div class="scene-buttons">
+            <button type="button" class="scene-btn" data-scene="severe" onclick="applyScene('severe')" aria-pressed="false">Severe weather</button>
+            <button type="button" class="scene-btn" data-scene="tropical" onclick="applyScene('tropical')" aria-pressed="false">Tropical</button>
+            <button type="button" class="scene-btn" data-scene="winter" onclick="applyScene('winter')" aria-pressed="false">Winter</button>
+            <button type="button" class="scene-btn" data-scene="fire" onclick="applyScene('fire')" aria-pressed="false">Fire</button>
+            <button type="button" class="scene-btn" data-scene="flood" onclick="applyScene('flood')" aria-pressed="false">Flood</button>
+            <button type="button" class="scene-btn" data-scene="geo" onclick="applyScene('geo')" aria-pressed="false">Geohazards</button>
+            <button type="button" class="scene-btn" data-scene="ocean" onclick="applyScene('ocean')" aria-pressed="false">Ocean</button>
+            <button type="button" class="scene-btn" data-scene="europe" onclick="applyScene('europe')" aria-pressed="false">Europe</button>
+            <button type="button" class="scene-btn scene-clear" onclick="applyScene(null)">Clear</button>
+          </div>
+        </div>
+
+        <!-- ── Alerts & warnings ── -->
+        <details class="mls-section" data-group="alerts" open>
+          <summary><span><span aria-hidden="true">⚠️</span> Alerts &amp; warnings</span><span class="mls-chevron" aria-hidden="true">▾</span></summary>
           <div class="mls-content">
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-eq" onchange="toggleLayer('eq')">
-              <span class="layer-dot" style="background:#dbbc7f"></span>
-              Earthquakes (USGS)
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-gdacs" onchange="toggleLayer('gdacs')">
-              <span class="layer-dot" style="background:#e67e80"></span>
-              GDACS Disasters
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-wmo" onchange="toggleLayer('wmo')">
-              <span class="layer-dot" style="background:#d699b6;border-radius:2px"></span>
-              WMO Global Alerts
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-eonet" onchange="toggleLayer('eonet')">
-              <span class="layer-dot" style="background:#d699b6"></span>
-              EONET Events
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-volc" onchange="toggleLayer('volc')">
-              <span class="layer-dot" style="background:#e69875;clip-path:polygon(50% 0%,100% 100%,0% 100%)"></span>
-              Volcanism
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-wind" onchange="toggleLayer('wind')">
-              <span class="layer-dot" style="background:#83c092;border-radius:2px"></span>
-              Surface Wind
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-hur" onchange="toggleLayer('hur')">
-              <span class="layer-dot" style="background:#e69875"></span>
-              Tropical Cyclones
-            </label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-eas" onchange="toggleLayer('eas')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="#e69875" fill-opacity=".15" stroke="#141a1d" stroke-width="3.5"/><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="none" stroke="#e69875" stroke-width="1.8"/></svg><span class="layer-name">NWS alerts</span><span class="layer-tag">US</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-wmo" onchange="toggleLayer('wmo')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="#e67e80" fill-opacity=".15" stroke="#141a1d" stroke-width="3.5"/><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="none" stroke="#e67e80" stroke-width="1.8"/></svg><span class="layer-name">WMO alerts</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-meteoalarm" onchange="toggleLayer('meteoalarm')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="#dbbc7f" fill-opacity=".15" stroke="#141a1d" stroke-width="3.5"/><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="none" stroke="#dbbc7f" stroke-width="1.8"/></svg><span class="layer-name">Meteoalarm</span><span class="layer-tag">EU</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-msc" onchange="toggleLayer('msc')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="#e69875" fill-opacity=".15" stroke="#141a1d" stroke-width="3.5"/><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="none" stroke="#e69875" stroke-width="1.8" stroke-dasharray="3 2"/></svg><span class="layer-name">Canada alerts</span><span class="layer-tag">CA</span></label>
+          </div>
+        </details>
+
+        <!-- ── Tropical ── -->
+        <details class="mls-section" data-group="tropical" open>
+          <summary><span><span aria-hidden="true">🌀</span> Tropical</span><span class="mls-chevron" aria-hidden="true">▾</span></summary>
+          <div class="mls-content">
+            <label class="layer-toggle"><input type="checkbox" id="toggle-hur" onchange="toggleLayer('hur')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="#e69875" stroke="#fff" stroke-width="1.5"/><text x="8" y="10.8" font-size="7.5" text-anchor="middle" fill="#1e2326" font-weight="900">2</text></svg><span class="layer-name">Tropical cyclones</span><span class="layer-tag">World</span></label>
             <!-- The threshold picker sits outside the label so using it doesn't toggle the layer -->
             <div class="layer-toggle-row">
-              <label class="layer-toggle">
-                <input type="checkbox" id="toggle-hurprob" onchange="toggleLayer('hurprob')">
-                <span class="layer-dot" style="background:transparent;border:1.5px solid #e0b0f0"></span>
-                TC Wind Probabilities
-              </label>
-              <select id="hurprob-kt" class="layer-select" onchange="loadHurricaneProbs()" title="Wind speed threshold">
+              <label class="layer-toggle"><input type="checkbox" id="toggle-hurprob" onchange="toggleLayer('hurprob')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="8" cy="8" rx="6.5" ry="4.5" fill="none" stroke="#e0b0f0" stroke-width="1.6"/><ellipse cx="8" cy="8" rx="3" ry="2" fill="none" stroke="#e0b0f0" stroke-width="2.2"/></svg><span class="layer-name">TC wind probabilities</span></label>
+              <select id="hurprob-kt" class="layer-select" onchange="loadHurricaneProbs()" aria-label="Wind probability threshold">
                 <option value="34" selected>34 kt</option>
                 <option value="50">50 kt</option>
                 <option value="64">64 kt</option>
@@ -242,166 +231,101 @@
           </div>
         </details>
 
-        <!-- ── United States ────────────────────────── -->
-        <details class="mls-section" open>
-          <summary><span>🇺🇸 United States</span><span class="mls-chevron">▾</span></summary>
+        <!-- ── Outlooks ── -->
+        <details class="mls-section" data-group="outlooks" open>
+          <summary><span><span aria-hidden="true">🗓️</span> Outlooks</span><span class="mls-chevron" aria-hidden="true">▾</span></summary>
           <div class="mls-content">
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-eas" onchange="toggleLayer('eas')">
-              <span class="layer-dot" style="background:#e67e80"></span>
-              NWS Alerts
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-lsr" onchange="toggleLayer('lsr')">
-              <span class="layer-dot" style="background:#83c092"></span>
-              SPC Storm Reports
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-spc-d1" onchange="toggleLayer('spc-d1')">
-              <span class="layer-dot" style="background:#e69875;border-radius:2px"></span>
-              SPC Outlook Day 1
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-spc-d2" onchange="toggleLayer('spc-d2')">
-              <span class="layer-dot" style="background:#dbbc7f;border-radius:2px"></span>
-              SPC Outlook Day 2
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-spc-d3" onchange="toggleLayer('spc-d3')">
-              <span class="layer-dot" style="background:#a7c080;border-radius:2px"></span>
-              SPC Outlook Day 3
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-fwx-d1" onchange="toggleLayer('fwx-d1')">
-              <span class="layer-dot" style="background:#e69875;border-radius:2px;outline:1px solid #e67e80;outline-offset:1px"></span>
-              Fire Weather Day 1
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-fwx-d2" onchange="toggleLayer('fwx-d2')">
-              <span class="layer-dot" style="background:#dbbc7f;border-radius:2px;outline:1px solid #e69875;outline-offset:1px"></span>
-              Fire Weather Day 2
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-radar" onchange="toggleLayer('radar')">
-              <span class="layer-dot" style="background:#4fc3f7;border-radius:2px"></span>
-              NEXRAD Radar
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-gauge" onchange="toggleLayer('gauge')">
-              <span class="layer-dot" style="background:#e69875;border-radius:2px"></span>
-              River Gauges (NWPS)
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-drought" onchange="toggleLayer('drought')">
-              <span class="layer-dot" style="background:#dbbc7f;border-radius:2px"></span>
-              Drought Monitor
-            </label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-spc-d1" onchange="toggleLayer('spc-d1')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="#ffe066" fill-opacity=".45" stroke="#ffe066" stroke-width="1.5"/></svg><span class="layer-name">Severe outlook, day 1</span><span class="layer-tag">US</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-spc-d2" onchange="toggleLayer('spc-d2')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="#ffe066" fill-opacity=".15" stroke="#141a1d" stroke-width="3.5"/><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="none" stroke="#ffe066" stroke-width="1.8" stroke-dasharray="3 2"/></svg><span class="layer-name">Severe outlook, day 2</span><span class="layer-tag">US</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-spc-d3" onchange="toggleLayer('spc-d3')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="#ffe066" fill-opacity=".15" stroke="#141a1d" stroke-width="3.5"/><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="none" stroke="#ffe066" stroke-width="1.8" stroke-dasharray="1 2"/></svg><span class="layer-name">Severe outlook, day 3</span><span class="layer-tag">US</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-fwx-d1" onchange="toggleLayer('fwx-d1')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="#e69800" fill-opacity=".45" stroke="#e69800" stroke-width="1.5"/></svg><span class="layer-name">Fire weather, day 1</span><span class="layer-tag">US</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-fwx-d2" onchange="toggleLayer('fwx-d2')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="#e69800" fill-opacity=".15" stroke="#141a1d" stroke-width="3.5"/><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="none" stroke="#e69800" stroke-width="1.8" stroke-dasharray="3 2"/></svg><span class="layer-name">Fire weather, day 2</span><span class="layer-tag">US</span></label>
           </div>
         </details>
 
-        <!-- ── Europe ───────────────────────────────── -->
-        <details class="mls-section">
-          <summary><span>🌍 Europe</span><span class="mls-chevron">▾</span></summary>
+        <!-- ── Observations ── -->
+        <details class="mls-section" data-group="obs" open>
+          <summary><span><span aria-hidden="true">📍</span> Observations</span><span class="mls-chevron" aria-hidden="true">▾</span></summary>
           <div class="mls-content">
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-meteoalarm" onchange="toggleLayer('meteoalarm')">
-              <span class="layer-dot" style="background:#e69875;border-radius:2px"></span>
-              Meteoalarm Warnings
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-dwd-radar" onchange="toggleLayer('dwd-radar')">
-              <span class="layer-dot" style="background:#4fc3f7;border-radius:2px"></span>
-              DWD Radar (Germany)
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-fmi-radar" onchange="toggleLayer('fmi-radar')">
-              <span class="layer-dot" style="background:#64b5f6;border-radius:2px"></span>
-              FMI Radar (Finland)
-            </label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-wind" onchange="toggleLayer('wind')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><g stroke="#141a1d" stroke-width="3.6" stroke-linecap="round"><line x1="5" y1="14" x2="11" y2="2.5"/><line x1="11" y1="2.5" x2="14.5" y2="5.5"/><line x1="9.6" y1="5.3" x2="13" y2="8.2"/></g><g stroke="#ece8dc" stroke-width="1.5" stroke-linecap="round"><line x1="5" y1="14" x2="11" y2="2.5"/><line x1="11" y1="2.5" x2="14.5" y2="5.5"/><line x1="9.6" y1="5.3" x2="13" y2="8.2"/></g><circle cx="5" cy="14" r="1.6" fill="#ece8dc"/></svg><span class="layer-name">Surface wind</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-lsr" onchange="toggleLayer('lsr')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><polygon points="5,9 1.5,2.5 8.5,2.5" fill="#ff4d4d" stroke="#141a1d"/><rect x="9" y="2.5" width="5.5" height="5.5" fill="#4d9de0" stroke="#141a1d"/><circle cx="8" cy="12" r="3" fill="#3cb371" stroke="#141a1d"/></svg><span class="layer-name">Storm reports</span><span class="layer-tag">US</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-gauge" onchange="toggleLayer('gauge')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" fill="#e67e80" stroke="#141a1d" stroke-width="1.5"/></svg><span class="layer-name">River gauges</span><span class="layer-tag">US</span></label>
           </div>
         </details>
 
-        <!-- ── Canada ───────────────────────────────── -->
-        <details class="mls-section">
-          <summary><span>🇨🇦 Canada</span><span class="mls-chevron">▾</span></summary>
+        <!-- ── Hazard events ── -->
+        <details class="mls-section" data-group="events" open>
+          <summary><span><span aria-hidden="true">🌋</span> Hazard events</span><span class="mls-chevron" aria-hidden="true">▾</span></summary>
           <div class="mls-content">
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-msc" onchange="toggleLayer('msc')">
-              <span class="layer-dot" style="background:#7fbbb3;border-radius:2px"></span>
-              MSC Alerts
-            </label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-eq" onchange="toggleLayer('eq')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.2" fill="none" stroke="#f5b841" stroke-width="2"/></svg><span class="layer-name">Earthquakes</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-volc" onchange="toggleLayer('volc')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><polygon points="8,2.5 14,13 2,13" fill="#e69875" stroke="#141a1d" stroke-width="1.2"/></svg><span class="layer-name">Volcanoes</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-gdacs" onchange="toggleLayer('gdacs')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" transform="rotate(45 8 8)" fill="#e69875" stroke="#141a1d" stroke-width="1.2"/></svg><span class="layer-name">GDACS disasters</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-eonet" onchange="toggleLayer('eonet')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3.5" fill="#141a1d" stroke="#e69875" stroke-width="1.5"/><text x="8" y="11.2" font-size="8" text-anchor="middle" fill="#e69875" font-weight="800">▲</text></svg><span class="layer-name">EONET events</span><span class="layer-tag">World</span></label>
           </div>
         </details>
 
-        <!-- ── Remote Sensing ────────────────────────── -->
-        <details class="mls-section" open>
-          <summary><span>🛰️ Remote Sensing</span><span class="mls-chevron">▾</span></summary>
+        <!-- ── Radar & precipitation ── -->
+        <details class="mls-section" data-group="precip" open>
+          <summary><span><span aria-hidden="true">🌧️</span> Radar &amp; precipitation</span><span class="mls-chevron" aria-hidden="true">▾</span></summary>
           <div class="mls-content">
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-goesw" onchange="toggleLayer('goesw')">
-              <span class="layer-dot" style="background:#e69875;border-radius:2px"></span>
-              GOES-West IR
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-goese" onchange="toggleLayer('goese')">
-              <span class="layer-dot" style="background:#dbbc7f;border-radius:2px"></span>
-              GOES-East IR
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-meteosat" onchange="toggleLayer('meteosat')">
-              <span class="layer-dot" style="background:#a7c080;border-radius:2px"></span>
-              Meteosat IR (MTG)
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-himawari" onchange="toggleLayer('himawari')">
-              <span class="layer-dot" style="background:#7fbbb3;border-radius:2px"></span>
-              Himawari IR
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-rainviewer" onchange="toggleLayer('rainviewer')">
-              <span class="layer-dot" style="background:#83c092;border-radius:2px"></span>
-              RainViewer (Global)
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-imerg" onchange="toggleLayer('imerg')">
-              <span class="layer-dot" style="background:#d699b6;border-radius:2px"></span>
-              IMERG Precipitation
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-grace" onchange="toggleLayer('grace')">
-              <span class="layer-dot" style="background:#d699b6;border-radius:2px"></span>
-              GRACE Groundwater
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-smap-root" onchange="toggleLayer('smap-root')">
-              <span class="layer-dot" style="background:#dbbc7f;border-radius:2px"></span>
-              SMAP Root Zone
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-smap-surf" onchange="toggleLayer('smap-surf')">
-              <span class="layer-dot" style="background:#e69875;border-radius:2px"></span>
-              SMAP Surface
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-sst" onchange="toggleLayer('sst')">
-              <span class="layer-dot" style="background:linear-gradient(90deg,#3b4cc0,#dbbc7f,#e67e80);border-radius:2px"></span>
-              Sea Surface Temp
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-seaice" onchange="toggleLayer('seaice')">
-              <span class="layer-dot" style="background:#cfe8f3;border-radius:2px"></span>
-              Sea Ice Concentration
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-ozone" onchange="toggleLayer('ozone')">
-              <span class="layer-dot" style="background:linear-gradient(90deg,#5e4fa2,#edee93,#9e0142);border-radius:2px"></span>
-              Total Column Ozone
-            </label>
-            <label class="layer-toggle">
-              <input type="checkbox" id="toggle-so2" onchange="toggleLayer('so2')">
-              <span class="layer-dot" style="background:linear-gradient(90deg,#082864,#6eafd6,#f7fbff);border-radius:2px"></span>
-              Sulfur Dioxide (SO&#8322;)
-            </label>
+            <div class="mls-group-note">One colour layer shows at a time</div>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-radar" onchange="toggleLayer('radar')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g0402fdfdfd"><stop offset="0.00" stop-color="#04e9e7"/><stop offset="0.25" stop-color="#02fd02"/><stop offset="0.50" stop-color="#fdf802"/><stop offset="0.75" stop-color="#fd9500"/><stop offset="1.00" stop-color="#fd0000"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g0402fdfdfd)"/></svg><span class="layer-name">NEXRAD radar</span><span class="layer-tag">US</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-dwd-radar" onchange="toggleLayer('dwd-radar')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g0402fdfdfd"><stop offset="0.00" stop-color="#04e9e7"/><stop offset="0.25" stop-color="#02fd02"/><stop offset="0.50" stop-color="#fdf802"/><stop offset="0.75" stop-color="#fd9500"/><stop offset="1.00" stop-color="#fd0000"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g0402fdfdfd)"/></svg><span class="layer-name">DWD radar</span><span class="layer-tag">DE</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-fmi-radar" onchange="toggleLayer('fmi-radar')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g0402fdfdfd"><stop offset="0.00" stop-color="#04e9e7"/><stop offset="0.25" stop-color="#02fd02"/><stop offset="0.50" stop-color="#fdf802"/><stop offset="0.75" stop-color="#fd9500"/><stop offset="1.00" stop-color="#fd0000"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g0402fdfdfd)"/></svg><span class="layer-name">FMI radar</span><span class="layer-tag">FI</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-rainviewer" onchange="toggleLayer('rainviewer')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="gb83600ffc1"><stop offset="0.00" stop-color="#b8ab8a"/><stop offset="0.25" stop-color="#36bae5"/><stop offset="0.50" stop-color="#005588"/><stop offset="0.75" stop-color="#ffee00"/><stop offset="1.00" stop-color="#c10000"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#gb83600ffc1)"/></svg><span class="layer-name">RainViewer radar</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-imerg" onchange="toggleLayer('imerg')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g1f3cf0f0c8"><stop offset="0.00" stop-color="#1f6b1f"/><stop offset="0.25" stop-color="#3cb33c"/><stop offset="0.50" stop-color="#f0e442"/><stop offset="0.75" stop-color="#f08c1e"/><stop offset="1.00" stop-color="#c81e1e"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g1f3cf0f0c8)"/></svg><span class="layer-name">IMERG precipitation</span><span class="layer-tag">World</span></label>
+          </div>
+        </details>
+
+        <!-- ── Satellite clouds (IR) ── -->
+        <details class="mls-section" data-group="clouds" open>
+          <summary><span><span aria-hidden="true">🛰️</span> Satellite imagery</span><span class="mls-chevron" aria-hidden="true">▾</span></summary>
+          <div class="mls-content">
+            <div class="mls-group-note">"Clouds only" combines with anything. Enhanced colours, Air Mass and GeoColor are colour layers (one at a time).</div>
+            <div class="layer-toggle-row group-option">
+              <label for="ir-style" class="group-option-label">Infrared style</label>
+              <select id="ir-style" class="layer-select" onchange="setIrStyle(this.value)">
+                <option value="clouds" selected>Clouds only</option>
+                <option value="enhanced">Enhanced colours</option>
+              </select>
+            </div>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-goesw" onchange="toggleLayer('goesw')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g3a8cc4ff"><stop offset="0.00" stop-color="#3a3e42"/><stop offset="0.33" stop-color="#8c9298"/><stop offset="0.67" stop-color="#c4ccd4"/><stop offset="1.00" stop-color="#ffffff"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g3a8cc4ff)"/></svg><span class="layer-name">GOES-West</span><span class="layer-tag">Americas</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-goese" onchange="toggleLayer('goese')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g3a8cc4ff"><stop offset="0.00" stop-color="#3a3e42"/><stop offset="0.33" stop-color="#8c9298"/><stop offset="0.67" stop-color="#c4ccd4"/><stop offset="1.00" stop-color="#ffffff"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g3a8cc4ff)"/></svg><span class="layer-name">GOES-East</span><span class="layer-tag">Americas</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-meteosat" onchange="toggleLayer('meteosat')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g3a8cc4ff"><stop offset="0.00" stop-color="#3a3e42"/><stop offset="0.33" stop-color="#8c9298"/><stop offset="0.67" stop-color="#c4ccd4"/><stop offset="1.00" stop-color="#ffffff"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g3a8cc4ff)"/></svg><span class="layer-name">Meteosat</span><span class="layer-tag">EU/Africa</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-himawari" onchange="toggleLayer('himawari')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g3a8cc4ff"><stop offset="0.00" stop-color="#3a3e42"/><stop offset="0.33" stop-color="#8c9298"/><stop offset="0.67" stop-color="#c4ccd4"/><stop offset="1.00" stop-color="#ffffff"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g3a8cc4ff)"/></svg><span class="layer-name">Himawari</span><span class="layer-tag">Asia/Pacific</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-airmass" onchange="toggleLayer('airmass')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="gAirmass"><stop offset="0.00" stop-color="#8b1a1a"/><stop offset="0.25" stop-color="#c0392b"/><stop offset="0.50" stop-color="#2e8b57"/><stop offset="0.75" stop-color="#3b4cc0"/><stop offset="1.00" stop-color="#6a3d9a"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#gAirmass)"/></svg><span class="layer-name">Air Mass RGB (moisture)</span><span class="layer-tag">GOES · Himawari</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-geocolor" onchange="toggleLayer('geocolor')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="gGeocolor"><stop offset="0.00" stop-color="#1b3a5c"/><stop offset="0.33" stop-color="#2f6f4f"/><stop offset="0.67" stop-color="#b89c6b"/><stop offset="1.00" stop-color="#f4f4f4"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#gGeocolor)"/></svg><span class="layer-name">GeoColor</span><span class="layer-tag">GOES</span></label>
+          </div>
+        </details>
+
+        <!-- ── Ocean & ice ── -->
+        <details class="mls-section" data-group="ocean" open>
+          <summary><span><span aria-hidden="true">🌊</span> Ocean &amp; ice</span><span class="mls-chevron" aria-hidden="true">▾</span></summary>
+          <div class="mls-content">
+            <div class="mls-group-note">One colour layer shows at a time</div>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-sst" onchange="toggleLayer('sst')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g0c161a2c"><stop offset="0.00" stop-color="#0c1428"/><stop offset="0.33" stop-color="#16467a"/><stop offset="0.67" stop-color="#1a6280"/><stop offset="1.00" stop-color="#2c8e8a"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g0c161a2c)"/></svg><span class="layer-name">Sea surface temperature</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-seaice" onchange="toggleLayer('seaice')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g5a9fff"><stop offset="0.00" stop-color="#5a6b78"/><stop offset="0.50" stop-color="#9fb4c4"/><stop offset="1.00" stop-color="#ffffff"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g5a9fff)"/></svg><span class="layer-name">Sea ice concentration</span><span class="layer-tag">Polar</span></label>
+          </div>
+        </details>
+
+        <!-- ── Land & water ── -->
+        <details class="mls-section" data-group="land" open>
+          <summary><span><span aria-hidden="true">🌱</span> Land &amp; water</span><span class="mls-chevron" aria-hidden="true">▾</span></summary>
+          <div class="mls-content">
+            <div class="mls-group-note">One colour layer shows at a time</div>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-smap-root" onchange="toggleLayer('smap-root')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g8cc96f1f"><stop offset="0.00" stop-color="#8c5a2b"/><stop offset="0.33" stop-color="#c9b48a"/><stop offset="0.67" stop-color="#6fb3a6"/><stop offset="1.00" stop-color="#1f6f73"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g8cc96f1f)"/></svg><span class="layer-name">Soil moisture, root zone</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-smap-surf" onchange="toggleLayer('smap-surf')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g8cc96f1f"><stop offset="0.00" stop-color="#8c5a2b"/><stop offset="0.33" stop-color="#c9b48a"/><stop offset="0.67" stop-color="#6fb3a6"/><stop offset="1.00" stop-color="#1f6f73"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g8cc96f1f)"/></svg><span class="layer-name">Soil moisture, surface</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-grace" onchange="toggleLayer('grace')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g8cd97a1f"><stop offset="0.00" stop-color="#8c5a2b"/><stop offset="0.33" stop-color="#d9c8a8"/><stop offset="0.67" stop-color="#7aa7d6"/><stop offset="1.00" stop-color="#1f4e8c"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g8cd97a1f)"/></svg><span class="layer-name">Groundwater (GRACE)</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-drought" onchange="toggleLayer('drought')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="#ffaa00" fill-opacity=".45" stroke="#ffaa00" stroke-width="1.5"/></svg><span class="layer-name">Drought Monitor</span><span class="layer-tag">US</span></label>
+          </div>
+        </details>
+
+        <!-- ── Atmosphere ── -->
+        <details class="mls-section" data-group="atmos" open>
+          <summary><span><span aria-hidden="true">🌫️</span> Atmosphere</span><span class="mls-chevron" aria-hidden="true">▾</span></summary>
+          <div class="mls-content">
+            <label class="layer-toggle"><input type="checkbox" id="toggle-ozone" onchange="toggleLayer('ozone')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g5b8ec9"><stop offset="0.00" stop-color="#5b2a86"/><stop offset="0.50" stop-color="#8e6cb8"/><stop offset="1.00" stop-color="#c9b8e0"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g5b8ec9)"/></svg><span class="layer-name">Total ozone</span><span class="layer-tag">World</span></label>
+            <label class="layer-toggle"><input type="checkbox" id="toggle-so2" onchange="toggleLayer('so2')"><svg class="layer-sym" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="g086ef7"><stop offset="0.00" stop-color="#082864"/><stop offset="0.50" stop-color="#6eafd6"/><stop offset="1.00" stop-color="#f7fbff"/></linearGradient></defs><rect x="1" y="4.5" width="14" height="7" rx="2" fill="url(#g086ef7)"/></svg><span class="layer-name">Sulfur dioxide (SO&#8322;)</span><span class="layer-tag">World</span></label>
           </div>
         </details>
 
@@ -450,14 +374,11 @@
         <details class="mls-section">
           <summary><span>Earthquakes</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">USGS seismic events plotted as circle markers. Circle radius scales with magnitude; a white ring indicates the event occurred within the past hour.</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#83c092"></span> &lt; M3.0 — Micro</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#83c092"></span> M3.0–3.9 — Minor</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#a7c080"></span> M4.0–4.9 — Light</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#dbbc7f"></span> M5.0–5.9 — Moderate</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e69875"></span> M6.0–6.9 — Strong</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e67e80"></span> M7.0–7.9 — Major</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e67e80;outline:1px solid #e67e80;outline-offset:1px"></span> M8.0+ — Great</div>
+            <div class="mls-desc">USGS earthquakes as hollow rings. Ring size scales with magnitude; colour shows how recent it is.</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:transparent;border:2px solid #ffffff;box-sizing:border-box"></span> Past hour</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:transparent;border:2px solid #f5b841;box-sizing:border-box"></span> Past day</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:transparent;border:2px solid #c9a66b;box-sizing:border-box"></span> Past week</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:transparent;border:2px solid #9aa3a0;box-sizing:border-box"></span> Older</div>
           </div>
         </details>
 
@@ -465,10 +386,15 @@
         <details class="mls-section">
           <summary><span>NWS Alerts</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">National Weather Service active polygon alerts. Alerts without direct geometry fetch their zone boundary on click.</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e67e80"></span> Extreme — Immediate threat to life/property</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e69875"></span> Severe — Significant threat</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#dbbc7f"></span> Moderate — Possible threat</div>
+            <div class="mls-desc">National Weather Service alerts. Colour shows severity; line style shows the product type. Alerts without their own shape fetch their zone boundary on click.</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #e67e80;box-shadow:0 0 0 1.5px #141a1d;"></span> Extreme</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #e69875;box-shadow:0 0 0 1.5px #141a1d;"></span> Severe</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #dbbc7f;box-shadow:0 0 0 1.5px #141a1d;"></span> Moderate</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #dbbc7f;box-shadow:0 0 0 1.5px #141a1d;"></span> Warning — solid</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px dashed #dbbc7f;box-shadow:0 0 0 1.5px #141a1d;"></span> Watch — dashed</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px dotted #dbbc7f;box-shadow:0 0 0 1.5px #141a1d;"></span> Advisory / statement — dotted</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #e69875;box-shadow:0 0 0 1.5px #3d7fc4;"></span> Flood products — blue edge</div>
+            <div class="mls-note">While a colour raster is on (radar, precipitation, ocean or land fields), areas show as outlines only so the raster stays readable.</div>
           </div>
         </details>
 
@@ -476,10 +402,10 @@
         <details class="mls-section">
           <summary><span>SPC Local Storm Reports</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">SPC LSRs — NWS storm reports from the last 24 hours. Small circle markers at the report location. Magnitude shown in popup (hail diameter in inches, wind speed in mph).</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e67e80"></span> 🌪️ Tornado</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#dbbc7f"></span> 🌨️ Hail</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#83c092"></span> 💨 Wind Damage</div>
+            <div class="mls-desc">NWS storm reports from the last 24 hours, in SPC's colours with a distinct shape per type. Magnitude in the popup (hail size in inches, wind in mph).</div>
+            <div class="mls-swatch-row"><svg width="12" height="12" viewBox="0 0 14 14" style="flex-shrink:0;margin-top:2px"><polygon points="7,13 1,2 13,2" fill="#ff4d4d" stroke="#141a1d" stroke-width="1.4"/></svg> Tornado</div>
+            <div class="mls-swatch-row"><svg width="12" height="12" viewBox="0 0 14 14" style="flex-shrink:0;margin-top:2px"><rect x="2.5" y="2.5" width="9" height="9" fill="#4d9de0" stroke="#141a1d" stroke-width="1.4"/></svg> Wind damage</div>
+            <div class="mls-swatch-row"><svg width="12" height="12" viewBox="0 0 14 14" style="flex-shrink:0;margin-top:2px"><circle cx="7" cy="7" r="5" fill="#3cb371" stroke="#141a1d" stroke-width="1.4"/></svg> Hail</div>
           </div>
         </details>
 
@@ -487,10 +413,10 @@
         <details class="mls-section">
           <summary><span>GDACS Global Disasters</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">Global Disaster Alert and Coordination System (EU JRC). Diamond markers labeled with event type (TC, FL, EQ…) and colored by humanitarian alert level. Covers tropical cyclones, floods, earthquakes, droughts, wildfires, volcanoes, and tsunamis worldwide.</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e67e80;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></span> Red Alert — Major humanitarian impact expected</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e69875;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></span> Orange Alert — Significant impact expected</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#a7c080;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></span> Green Alert — Limited impact</div>
+            <div class="mls-desc">Global Disaster Alert and Coordination System (EU JRC). Diamonds labelled with the event type (TC, FL, EQ…), coloured by expected humanitarian impact. Covers tropical cyclones, floods, earthquakes, droughts, wildfires, volcanoes and tsunamis.</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e67e80;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></span> Red — major impact expected</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e69875;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></span> Orange — significant impact expected</div>
+            <div class="mls-swatch-row"><span class="mls-swatch" style="background:transparent;border:1.5px solid #a7c080;transform:rotate(45deg) scale(.75);box-sizing:border-box;border-radius:0"></span> Green — limited impact (small outline)</div>
           </div>
         </details>
 
@@ -510,13 +436,13 @@
             <div class="mls-sub">Track and cone</div>
             <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #e69875"></span> Past track, coloured by stage</div>
             <div class="mls-swatch-row"><span class="mls-line" style="border-top:2px dashed #fff"></span> Forecast track</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:rgba(211,198,170,.25);outline:1px solid #d3c6aa"></span> Forecast cone: probable path of the centre, not storm size</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:rgba(255,255,255,.12);outline:1.5px solid #fff"></span> Forecast cone: probable path of the centre, not storm size</div>
             <div class="mls-swatch-row"><span class="hur-point hur-point-now mls-point" style="background:#e69875">2</span> Current position (larger)</div>
-            <div class="mls-sub">Coastal watches and warnings</div>
-            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px dashed #dbbc7f"></span> Tropical Storm Watch</div>
-            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px solid #e69875"></span> Tropical Storm Warning</div>
-            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px dashed #d699b6"></span> Hurricane Watch</div>
-            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px solid #e67e80"></span> Hurricane Warning</div>
+            <div class="mls-sub">Coastal watches and warnings (NHC colours)</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px dashed #f2d94e"></span> Tropical Storm Watch</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px solid #4d8fe0"></span> Tropical Storm Warning</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px dashed #ff8fd8"></span> Hurricane Watch</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:4px solid #ff4d4d"></span> Hurricane Warning</div>
             <div class="mls-sub">TC Wind Probabilities (separate toggle)</div>
             <div class="mls-desc">Chance of winds at or above the chosen speed (34, 50 or 64 kt) at any point within the next 5 days. Drawn as outlines so they stay readable over filled layers.</div>
             <div class="mls-swatch-row"><span class="mls-line" style="border-top:1px dotted #e0b0f0"></span> 10%</div>
@@ -529,11 +455,12 @@
         <details class="mls-section">
           <summary><span>Meteoalarm — Europe</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">Active weather warnings for 39 European countries via Meteoalarm / EUMETNET. Polygon fill shown where country provides boundary geometry. Click a polygon or panel item to open warning details.</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#dbbc7f"></span> Minor — Low impact</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e69875"></span> Moderate — Moderate impact</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e67e80"></span> Severe — High impact</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#d699b6"></span> Extreme — Very high impact, threat to life</div>
+            <div class="mls-desc">Meteoalarm warnings for 39 European countries, coloured by awareness level. Warnings without a shape show as a badge at the region's centre.</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #e67e80;box-shadow:0 0 0 1.5px #141a1d;"></span> Red — very dangerous</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #e69875;box-shadow:0 0 0 1.5px #141a1d;"></span> Orange — dangerous</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #dbbc7f;box-shadow:0 0 0 1.5px #141a1d;"></span> Yellow — potentially dangerous</div>
+            <div class="mls-swatch-row"><span class="alert-badge-pin" style="border-color:#e69875;color:#e69875;width:13px;height:13px;font-size:8px;flex-shrink:0;margin-top:1px">!</span> Warning located by region only</div>
+            <div class="mls-note">While a colour raster is on (radar, precipitation, ocean or land fields), areas show as outlines only so the raster stays readable.</div>
           </div>
         </details>
 
@@ -541,10 +468,14 @@
         <details class="mls-section">
           <summary><span>WMO Global Alerts</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">WMO Severe Weather Information Centre — aggregates CAP alerts from national meteorological services worldwide. Fills coverage gaps in Africa, Central Asia, Southeast Asia, and other regions. Polygon fill where geometry is provided. Severe and Extreme alerts shown by default. Australian warnings are Bureau of Meteorology CAP alerts relayed through SWIC and credited to BOM.</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#dbbc7f"></span> Moderate</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e69875"></span> Severe</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e67e80"></span> Extreme</div>
+            <div class="mls-desc">WMO Severe Weather Information Centre alerts (severe and extreme only on the map). Colour shows severity; line style shows the product type. Point alerts show as a badge.</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #e67e80;box-shadow:0 0 0 1.5px #141a1d;"></span> Extreme</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #e69875;box-shadow:0 0 0 1.5px #141a1d;"></span> Severe</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #dbbc7f;box-shadow:0 0 0 1.5px #141a1d;"></span> Warning — solid</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px dashed #dbbc7f;box-shadow:0 0 0 1.5px #141a1d;"></span> Watch — dashed</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px dotted #dbbc7f;box-shadow:0 0 0 1.5px #141a1d;"></span> Advisory / statement — dotted</div>
+            <div class="mls-swatch-row"><span class="alert-badge-pin" style="border-color:#e67e80;color:#e67e80;width:13px;height:13px;font-size:8px;flex-shrink:0;margin-top:1px">!</span> Point alert</div>
+            <div class="mls-note">While a colour raster is on (radar, precipitation, ocean or land fields), areas show as outlines only so the raster stays readable.</div>
           </div>
         </details>
 
@@ -552,26 +483,27 @@
         <details class="mls-section">
           <summary><span>Canada — MSC Alerts</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">Environment Canada MSC active weather alerts as polygons. Covers all Canadian provinces and territories.</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e67e80"></span> Warning — Dangerous conditions expected</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e69875"></span> Watch — Conditions favourable for dangerous weather</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#dbbc7f"></span> Advisory — Conditions may cause inconvenience</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#7fbbb3"></span> Statement — Weather information of interest</div>
+            <div class="mls-desc">Environment and Climate Change Canada alerts.</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #e67e80;box-shadow:0 0 0 1.5px #141a1d;"></span> Warning — solid</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px dashed #e69875;box-shadow:0 0 0 1.5px #141a1d;"></span> Watch — dashed</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px dotted #dbbc7f;box-shadow:0 0 0 1.5px #141a1d;"></span> Advisory — dotted</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px dotted #a9b1ab;box-shadow:0 0 0 1.5px #141a1d;"></span> Statement — dotted</div>
+            <div class="mls-note">While a colour raster is on (radar, precipitation, ocean or land fields), areas show as outlines only so the raster stays readable.</div>
           </div>
         </details>
 
         <details class="mls-section">
           <summary><span>EONET Events</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">NASA Earth Observatory Natural Event Tracker — open events sourced from satellite observations and partner agencies. Markers use a dashed ring to distinguish from earthquake circles.</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#e69875"></span> 🔥 Wildfire</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#d699b6"></span> 🌋 Volcano</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#7fbbb3"></span> 🌀 Severe Storm</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#83c092"></span> 🧊 Sea / Lake Ice</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#7fbbb3"></span> 🌊 Flood</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#859289"></span> 💨 Dust / Haze</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#dbbc7f"></span> 🏜️ Drought</div>
-            <div class="mls-swatch-row"><span class="mls-swatch" style="background:#d3c6aa"></span> ❄️ Snow</div>
+            <div class="mls-desc">NASA Earth Observatory Natural Event Tracker: open events from satellite observations and partner agencies, shown as a category badge.</div>
+            <div class="mls-swatch-row"><span class="eonet-badge" style="border-color:#e69875;width:16px;height:16px;font-size:9px;border-radius:4px;flex-shrink:0">🔥</span> Wildfire</div>
+            <div class="mls-swatch-row"><span class="eonet-badge" style="border-color:#d699b6;width:16px;height:16px;font-size:9px;border-radius:4px;flex-shrink:0">🌋</span> Volcano</div>
+            <div class="mls-swatch-row"><span class="eonet-badge" style="border-color:#7fbbb3;width:16px;height:16px;font-size:9px;border-radius:4px;flex-shrink:0">🌀</span> Severe storm</div>
+            <div class="mls-swatch-row"><span class="eonet-badge" style="border-color:#83c092;width:16px;height:16px;font-size:9px;border-radius:4px;flex-shrink:0">🧊</span> Sea / lake ice</div>
+            <div class="mls-swatch-row"><span class="eonet-badge" style="border-color:#7fbbb3;width:16px;height:16px;font-size:9px;border-radius:4px;flex-shrink:0">🌊</span> Flood</div>
+            <div class="mls-swatch-row"><span class="eonet-badge" style="border-color:#859289;width:16px;height:16px;font-size:9px;border-radius:4px;flex-shrink:0">💨</span> Dust / haze</div>
+            <div class="mls-swatch-row"><span class="eonet-badge" style="border-color:#dbbc7f;width:16px;height:16px;font-size:9px;border-radius:4px;flex-shrink:0">🏜️</span> Drought</div>
+            <div class="mls-swatch-row"><span class="eonet-badge" style="border-color:#d3c6aa;width:16px;height:16px;font-size:9px;border-radius:4px;flex-shrink:0">❄️</span> Snow</div>
           </div>
         </details>
 
@@ -599,13 +531,17 @@
         <details class="mls-section">
           <summary><span>SPC Convective Outlook</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">SPC Day 1–3 categorical convective outlooks as filled polygons. Day 1 shown by default; Day 2 &amp; 3 toggleable. Polygons update as new outlooks are issued throughout the day.</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#a7c080"></span> TSTM — General Thunderstorms</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#83c092"></span> MRGL — Marginal Risk</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#dbbc7f"></span> SLGT — Slight Risk</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e69875"></span> ENH — Enhanced Risk</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e67e80"></span> MDT — Moderate Risk</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#d699b6"></span> HIGH — High Risk</div>
+            <div class="mls-desc">Storm Prediction Center categorical outlook, in SPC's own colours. Day 1 solid, day 2 dashed, day 3 dotted; with more than one day on, areas show as outlines only.</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #c1e9c1;box-shadow:0 0 0 1.5px #141a1d;"></span> General thunderstorms (outline only)</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#66a366"></span> Marginal</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#ffe066"></span> Slight</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#ffa366"></span> Enhanced</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e06666"></span> Moderate</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#ee99ee"></span> High</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px solid #ffa366;box-shadow:0 0 0 1.5px #141a1d;"></span> Day 1</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px dashed #ffa366;box-shadow:0 0 0 1.5px #141a1d;"></span> Day 2</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px dotted #ffa366;box-shadow:0 0 0 1.5px #141a1d;"></span> Day 3</div>
+            <div class="mls-note">While a colour raster is on (radar, precipitation, ocean or land fields), areas show as outlines only so the raster stays readable.</div>
           </div>
         </details>
 
@@ -613,11 +549,12 @@
         <details class="mls-section">
           <summary><span>SPC Fire Weather Outlook</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">SPC Day 1 &amp; 2 fire weather outlooks. Filled polygons show categorical risk areas; dashed purple outlines mark Dry Thunderstorm areas (lightning with little rain).</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#dbbc7f"></span> Elevated — Warm, dry, windy; fire spread possible</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e69875"></span> Critical — Conditions favor rapid, difficult-to-control fire spread</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e67e80"></span> Extremely Critical — Life-threatening fire behavior likely</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:none;border:2px dashed #d699b6"></span> Dry Thunderstorm — Lightning with minimal precipitation</div>
+            <div class="mls-desc">SPC fire weather outlook in SPC's colours. Day 1 solid, day 2 dashed.</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e69800"></span> Elevated</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#ff4d4d"></span> Critical</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e600a9"></span> Extremely critical</div>
+            <div class="mls-swatch-row"><span class="mls-line" style="border-top:2.5px dotted #c98a4b;box-shadow:0 0 0 1.5px #141a1d;"></span> Dry thunderstorms</div>
+            <div class="mls-note">While a colour raster is on (radar, precipitation, ocean or land fields), areas show as outlines only so the raster stays readable.</div>
           </div>
         </details>
 
@@ -637,17 +574,13 @@
         <details class="mls-section">
           <summary><span>US Drought Monitor</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">Weekly NOAA/UNL Drought Monitor polygons across CONUS. Updated each Thursday; reflects conditions through the previous Tuesday. Polygons show drought intensity.</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#dbbc7f"></span> D0 — Abnormally Dry</div>
-            <div class="mls-note" style="padding-left:18px">Short-term dryness slowing planting or pasture; elevated fire risk above normal</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e69875"></span> D1 — Moderate Drought</div>
-            <div class="mls-note" style="padding-left:18px">Some crop damage; high fire risk; streams, reservoirs, or wells low</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e67e80"></span> D2 — Severe Drought</div>
-            <div class="mls-note" style="padding-left:18px">Crop/pasture losses likely; water shortages common; restrictions likely</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#d699b6"></span> D3 — Extreme Drought</div>
-            <div class="mls-note" style="padding-left:18px">Major crop/pasture losses; widespread water shortages or restrictions</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#a7c080"></span> D4 — Exceptional Drought</div>
-            <div class="mls-note" style="padding-left:18px">Exceptional losses; widespread shortages of water in all reported uses</div>
+            <div class="mls-desc">Weekly US Drought Monitor, in its official colours.</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#ffff00"></span> D0 — Abnormally dry</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#fcd37f"></span> D1 — Moderate drought</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#ffaa00"></span> D2 — Severe drought</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e60000"></span> D3 — Extreme drought</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#730000;outline:1.5px solid #c0392b"></span> D4 — Exceptional drought</div>
+            <div class="mls-note">Drought counts as a colour layer: turning it on replaces radar, soil moisture or other colour layers, and vice versa.</div>
           </div>
         </details>
 
@@ -696,19 +629,15 @@
         <details class="mls-section">
           <summary><span>GOES-West IR</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">NOAA GOES-West (GOES-18) ABI Band 13 (10.3 µm) Clean Infrared via NASA GIBS. Covers eastern Pacific, Alaska, and western CONUS. 10-min scan cadence, ~40-min GIBS lag. NASA GIBS renders tiles with a fixed <b>Enhanced IR color table</b> — colors indicate cloud-top brightness temperature, not water vapor content.</div>
-            <div class="mls-sub">Cloud-top Brightness Temperature — Enhanced IR Scale</div>
-            <!-- Warm (dark/gray) → grayscale → white → cyan → blue → green → yellow → orange → red (coldest) -->
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#1c1c1c 0%,#909090 22%,#f8f8f8 36%,#00e8ff 44%,#0048d0 54%,#009000 64%,#f8f800 74%,#ff8000 84%,#e80000 100%)"></div>
-            <div class="mls-scale-labels"><span>&gt;−31°C</span><span>−42°C</span><span>−52°C</span><span>−62°C</span><span>&lt;−70°C</span></div>
-            <div class="mls-note" style="margin-top:4px">
-              <b style="color:var(--text)">Gray tones</b> — warm surface and low/mid clouds (&gt;−31°C / &gt;242 K)<br>
-              <b style="color:#00e8ff">Cyan</b> — high cold cloud tops (−32 to −42°C)<br>
-              <b style="color:#4080ff">Blue</b> — very cold tops, deep cirrus (−42 to −52°C)<br>
-              <b style="color:#40c040">Green</b> — deep convective towers (−52 to −62°C)<br>
-              <b style="color:#f8f800">Yellow</b> / <b style="color:#ff8000">Orange</b> — intense storms / hurricane eyewalls (−62 to −70°C)<br>
-              <b style="color:#e80000">Red</b> — extreme / overshooting tops (&lt;−70°C / &lt;203 K)
-            </div>
+            <div class="mls-desc">NOAA GOES-West (GOES-18) ABI Band 13 (10.3 µm) Clean Infrared via NASA GIBS. Covers eastern Pacific, Alaska, and western CONUS. 10-min scan cadence, ~40-min GIBS lag. The dashboard redraws each tile by temperature so only cloud shows: brightness is cloud-top temperature, not water vapour.</div>
+            <div class="mls-sub">Cloud-top brightness temperature — clouds only</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(255,255,255,0.95) 0%,rgba(250,252,253,0.94) 5%,rgba(245,249,252,0.93) 10%,rgba(240,245,250,0.91) 15%,rgba(235,242,248,0.9) 20%,rgba(225,233,239,0.86) 25%,rgba(216,223,230,0.82) 30%,rgba(206,214,221,0.79) 35%,rgba(196,204,212,0.75) 40%,rgba(182,190,197,0.69) 45%,rgba(168,175,182,0.63) 50%,rgba(154,161,167,0.56) 55%,rgba(140,146,152,0.5) 60%,rgba(130,136,141,0.42) 65%,rgba(120,125,130,0.34) 70%,rgba(110,115,119,0.26) 75%,rgba(100,104,108,0.18) 80%,rgba(98,101,104,0.14) 85%,rgba(95,97,99,0.09) 90%,rgba(93,94,95,0.04) 95%,rgba(90,90,90,0) 100%)"></div>
+            <div class="mls-scale-labels"><span>−90</span><span>−60</span><span>−40</span><span>−20</span><span>0</span><span>10 °C</span></div>
+            <div class="mls-note">Clear ground and warm low cloud are transparent. The colder the cloud top, the brighter and more opaque it is drawn: pale grey is mid-level cloud (−20 to −40 °C), and near-white is deep convection, cirrus shields and hurricane eyewalls (below −60 °C).</div>
+            <div class="mls-sub">Enhanced colours (Infrared style: Enhanced)</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#1c1c1c 0%,#909090 22%,#f8f8f8 36%,#00e8ff 44%,#0048d0 54%,#009000 64%,#f8f800 74%,#ff8000 84%,#e80000 94%,#ff7fcb 100%)"></div>
+            <div class="mls-scale-labels"><span>&gt;−31</span><span>−42</span><span>−52</span><span>−62</span><span>&lt;−70 °C</span></div>
+            <div class="mls-note">The provider's original colour table: greys for warm surfaces and low cloud, then cyan, blue, green, yellow, orange and red for ever-colder cloud tops. Colour steps mark the temperature thresholds used to judge storm and hurricane intensity. Counts as a colour layer.</div>
           </div>
         </details>
 
@@ -716,18 +645,15 @@
         <details class="mls-section">
           <summary><span>GOES-East IR</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">NOAA GOES-East (GOES-16) ABI Band 13 (10.3 µm) Clean Infrared via NASA GIBS. Covers Americas and the Atlantic Ocean. Identical sensor and Enhanced IR colormap as GOES-West. ~10-min scan cadence, ~40-min GIBS lag.</div>
-            <div class="mls-sub">Cloud-top Brightness Temperature — Enhanced IR Scale</div>
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#1c1c1c 0%,#909090 22%,#f8f8f8 36%,#00e8ff 44%,#0048d0 54%,#009000 64%,#f8f800 74%,#ff8000 84%,#e80000 100%)"></div>
-            <div class="mls-scale-labels"><span>&gt;−31°C</span><span>−42°C</span><span>−52°C</span><span>−62°C</span><span>&lt;−70°C</span></div>
-            <div class="mls-note" style="margin-top:4px">
-              <b style="color:var(--text)">Gray tones</b> — warm surface and low/mid clouds<br>
-              <b style="color:#00e8ff">Cyan</b> — high cold tops (−32 to −42°C)<br>
-              <b style="color:#4080ff">Blue</b> — very cold tops (−42 to −52°C)<br>
-              <b style="color:#40c040">Green</b> — deep convection (−52 to −62°C)<br>
-              <b style="color:#f8f800">Yellow</b> / <b style="color:#ff8000">Orange</b> — intense storms / Atlantic hurricanes (−62 to −70°C)<br>
-              <b style="color:#e80000">Red</b> — extreme / overshooting tops (&lt;−70°C)
-            </div>
+            <div class="mls-desc">NOAA GOES-East (GOES-16) ABI Band 13 (10.3 µm) Clean Infrared via NASA GIBS. Covers Americas and the Atlantic Ocean. Identical sensor and styling as GOES-West. ~10-min scan cadence, ~40-min GIBS lag.</div>
+            <div class="mls-sub">Cloud-top brightness temperature — clouds only</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(255,255,255,0.95) 0%,rgba(250,252,253,0.94) 5%,rgba(245,249,252,0.93) 10%,rgba(240,245,250,0.91) 15%,rgba(235,242,248,0.9) 20%,rgba(225,233,239,0.86) 25%,rgba(216,223,230,0.82) 30%,rgba(206,214,221,0.79) 35%,rgba(196,204,212,0.75) 40%,rgba(182,190,197,0.69) 45%,rgba(168,175,182,0.63) 50%,rgba(154,161,167,0.56) 55%,rgba(140,146,152,0.5) 60%,rgba(130,136,141,0.42) 65%,rgba(120,125,130,0.34) 70%,rgba(110,115,119,0.26) 75%,rgba(100,104,108,0.18) 80%,rgba(98,101,104,0.14) 85%,rgba(95,97,99,0.09) 90%,rgba(93,94,95,0.04) 95%,rgba(90,90,90,0) 100%)"></div>
+            <div class="mls-scale-labels"><span>−90</span><span>−60</span><span>−40</span><span>−20</span><span>0</span><span>10 °C</span></div>
+            <div class="mls-note">Clear ground and warm low cloud are transparent. The colder the cloud top, the brighter and more opaque it is drawn: pale grey is mid-level cloud (−20 to −40 °C), and near-white is deep convection, cirrus shields and hurricane eyewalls (below −60 °C).</div>
+            <div class="mls-sub">Enhanced colours (Infrared style: Enhanced)</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#1c1c1c 0%,#909090 22%,#f8f8f8 36%,#00e8ff 44%,#0048d0 54%,#009000 64%,#f8f800 74%,#ff8000 84%,#e80000 94%,#ff7fcb 100%)"></div>
+            <div class="mls-scale-labels"><span>&gt;−31</span><span>−42</span><span>−52</span><span>−62</span><span>&lt;−70 °C</span></div>
+            <div class="mls-note">The provider's original colour table: greys for warm surfaces and low cloud, then cyan, blue, green, yellow, orange and red for ever-colder cloud tops. Colour steps mark the temperature thresholds used to judge storm and hurricane intensity. Counts as a colour layer.</div>
           </div>
         </details>
 
@@ -736,10 +662,14 @@
           <summary><span>Meteosat IR (MTG)</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
             <div class="mls-desc">EUMETSAT Meteosat Third Generation (MTG-I) FCI Band IR 10.5 µm, served directly from EUMETSAT's own EUMETView WMS. Full-disk coverage of Europe, Africa, and the Atlantic from the 0° position, at a 10-minute scan cadence. MTG is the successor to the older Meteosat-11 SEVIRI imager.</div>
-            <div class="mls-sub">Cloud-top Brightness Temperature — Enhanced IR</div>
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#1c1c1c 0%,#8a8a8a 30%,#f2f2f2 50%,#00e0f0 64%,#00b050 76%,#f0e000 86%,#ff7000 94%,#e00000 100%)"></div>
-            <div class="mls-scale-labels"><span>Warm / surface</span><span></span><span>Cold tops</span><span></span><span>Coldest</span></div>
-            <div class="mls-note">Grayscale carries warm surface and low/mid cloud; the colour enhancement only kicks in on cold, high cloud tops so deep convection stands out. Cyan through green marks vigorous convection, yellow to red the coldest overshooting tops — storm systems over Africa, the Sahel, and Atlantic tropical waves.</div>
+            <div class="mls-sub">Cloud-top brightness temperature — clouds only</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(255,255,255,0.95) 0%,rgba(250,252,253,0.94) 5%,rgba(245,249,252,0.93) 10%,rgba(240,245,250,0.91) 15%,rgba(235,242,248,0.9) 20%,rgba(225,233,239,0.86) 25%,rgba(216,223,230,0.82) 30%,rgba(206,214,221,0.79) 35%,rgba(196,204,212,0.75) 40%,rgba(182,190,197,0.69) 45%,rgba(168,175,182,0.63) 50%,rgba(154,161,167,0.56) 55%,rgba(140,146,152,0.5) 60%,rgba(130,136,141,0.42) 65%,rgba(120,125,130,0.34) 70%,rgba(110,115,119,0.26) 75%,rgba(100,104,108,0.18) 80%,rgba(98,101,104,0.14) 85%,rgba(95,97,99,0.09) 90%,rgba(93,94,95,0.04) 95%,rgba(90,90,90,0) 100%)"></div>
+            <div class="mls-scale-labels"><span>−90</span><span>−60</span><span>−40</span><span>−20</span><span>0</span><span>10 °C</span></div>
+            <div class="mls-note">Clear ground and warm low cloud are transparent. The colder the cloud top, the brighter and more opaque it is drawn: pale grey is mid-level cloud (−20 to −40 °C), and near-white is deep convection, cirrus shields and hurricane eyewalls (below −60 °C). Temperatures are approximate: they are derived from EUMETSAT's grayscale product and calibrated against GOES-East.</div>
+            <div class="mls-sub">Enhanced colours (Infrared style: Enhanced)</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#1c1c1c 0%,#909090 22%,#f8f8f8 36%,#00e8ff 44%,#0048d0 54%,#009000 64%,#f8f800 74%,#ff8000 84%,#e80000 94%,#ff7fcb 100%)"></div>
+            <div class="mls-scale-labels"><span>&gt;−31</span><span>−42</span><span>−52</span><span>−62</span><span>&lt;−70 °C</span></div>
+            <div class="mls-note">The provider's original colour table: greys for warm surfaces and low cloud, then cyan, blue, green, yellow, orange and red for ever-colder cloud tops. Colour steps mark the temperature thresholds used to judge storm and hurricane intensity. Counts as a colour layer.</div>
           </div>
         </details>
 
@@ -747,21 +677,40 @@
         <details class="mls-section">
           <summary><span>Himawari IR</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">JMA Himawari-8/9 AHI Band 13 (10.4 µm) Clean Infrared via NASA GIBS. Full-disk view of East Asia, the western Pacific, and Australia, at a 10-minute scan cadence. Uses the same <b>Enhanced IR color table</b> as the GOES layers, so colors read identically across all three satellites.</div>
-            <div class="mls-sub">Cloud-top Brightness Temperature — Enhanced IR Scale</div>
-            <!-- Warm (dark/gray) → grayscale → white → cyan → blue → green → yellow → orange → red (coldest) -->
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#1c1c1c 0%,#909090 22%,#f8f8f8 36%,#00e8ff 44%,#0048d0 54%,#009000 64%,#f8f800 74%,#ff8000 84%,#e80000 100%)"></div>
-            <div class="mls-scale-labels"><span>&gt;−31°C</span><span>−42°C</span><span>−52°C</span><span>−62°C</span><span>&lt;−70°C</span></div>
-            <div class="mls-note" style="margin-top:4px">
-              <b style="color:var(--text)">Gray tones</b> — warm surface and low/mid clouds (&gt;−31°C)<br>
-              <b style="color:#00e8ff">Cyan</b> — high cold cloud tops (−32 to −42°C)<br>
-              <b style="color:#4080ff">Blue</b> — very cold tops, deep cirrus (−42 to −52°C)<br>
-              <b style="color:#40c040">Green</b> — deep convective towers (−52 to −62°C)<br>
-              <b style="color:#f8f800">Yellow</b> / <b style="color:#ff8000">Orange</b> — intense storms / typhoon eyewalls (−62 to −70°C)<br>
-              <b style="color:#e80000">Red</b> — extreme / overshooting tops (&lt;−70°C)
-            </div>
+            <div class="mls-desc">JMA Himawari-8/9 AHI Band 13 (10.4 µm) Clean Infrared via NASA GIBS. Full-disk view of East Asia, the western Pacific, and Australia, at a 10-minute scan cadence. Drawn with the same clouds-only styling as the GOES layers, so all three satellites read identically.</div>
+            <div class="mls-sub">Cloud-top brightness temperature — clouds only</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(255,255,255,0.95) 0%,rgba(250,252,253,0.94) 5%,rgba(245,249,252,0.93) 10%,rgba(240,245,250,0.91) 15%,rgba(235,242,248,0.9) 20%,rgba(225,233,239,0.86) 25%,rgba(216,223,230,0.82) 30%,rgba(206,214,221,0.79) 35%,rgba(196,204,212,0.75) 40%,rgba(182,190,197,0.69) 45%,rgba(168,175,182,0.63) 50%,rgba(154,161,167,0.56) 55%,rgba(140,146,152,0.5) 60%,rgba(130,136,141,0.42) 65%,rgba(120,125,130,0.34) 70%,rgba(110,115,119,0.26) 75%,rgba(100,104,108,0.18) 80%,rgba(98,101,104,0.14) 85%,rgba(95,97,99,0.09) 90%,rgba(93,94,95,0.04) 95%,rgba(90,90,90,0) 100%)"></div>
+            <div class="mls-scale-labels"><span>−90</span><span>−60</span><span>−40</span><span>−20</span><span>0</span><span>10 °C</span></div>
+            <div class="mls-note">Clear ground and warm low cloud are transparent. The colder the cloud top, the brighter and more opaque it is drawn: pale grey is mid-level cloud (−20 to −40 °C), and near-white is deep convection, cirrus shields and hurricane eyewalls (below −60 °C).</div>
+            <div class="mls-sub">Enhanced colours (Infrared style: Enhanced)</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#1c1c1c 0%,#909090 22%,#f8f8f8 36%,#00e8ff 44%,#0048d0 54%,#009000 64%,#f8f800 74%,#ff8000 84%,#e80000 94%,#ff7fcb 100%)"></div>
+            <div class="mls-scale-labels"><span>&gt;−31</span><span>−42</span><span>−52</span><span>−62</span><span>&lt;−70 °C</span></div>
+            <div class="mls-note">The provider's original colour table: greys for warm surfaces and low cloud, then cyan, blue, green, yellow, orange and red for ever-colder cloud tops. Colour steps mark the temperature thresholds used to judge storm and hurricane intensity. Counts as a colour layer.</div>
           </div>
         </details>
+
+        <!-- Air Mass RGB -->
+        <details class="mls-section">
+          <summary><span>Air Mass RGB</span><span class="mls-chevron">▾</span></summary>
+          <div class="mls-content">
+            <div class="mls-desc">GOES-West, GOES-East and Himawari Air Mass RGB via NASA GIBS: a composite of two water-vapour channels, an ozone channel and infrared. It shows the moisture and temperature of the middle and upper atmosphere rather than the clouds themselves. Counts as a colour layer.</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#b03a2e"></span> Red / orange: dry, descending upper air (jet streams, stratospheric intrusions)</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#2e8b57"></span> Green / olive: warm, moist tropical air mass</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#4b4fb3"></span> Blue / purple: cold polar air mass</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#f2f2f2"></span> White: thick, cold high cloud</div>
+            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#1e3a8a"></span> Dark blue: mid-level cloud</div>
+            <div class="mls-note">A sharp red edge next to cloud often marks a jet streak or a developing storm.</div>
+          </div>
+        </details>
+
+        <!-- GeoColor -->
+        <details class="mls-section">
+          <summary><span>GeoColor</span><span class="mls-chevron">▾</span></summary>
+          <div class="mls-content">
+            <div class="mls-desc">GOES-West and GOES-East GeoColor via NASA GIBS (not produced for Himawari). By day, near true colour: blue ocean, green and tan land, white cloud, grey smoke and dust. At night, infrared cloud over a static city-lights background: low cloud blue-grey, high cloud white. Counts as a colour layer.</div>
+          </div>
+        </details>
+
 
         <!-- GRACE -->
         <details class="mls-section">
@@ -769,9 +718,9 @@
           <div class="mls-content">
             <div class="mls-desc">NASA GRACE-FO Liquid Water Equivalent Thickness — total terrestrial water storage anomaly (groundwater + soil + surface water + snow/ice) relative to the 2004–2009 baseline. Monthly product; ~3-month lag. Via NASA GIBS.</div>
             <div class="mls-sub">Anomaly (cm LWE)</div>
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#b40000,#e05000,#f0a800,#f5e064,#ffffff,#90d8f0,#2090e0,#0028a0)"></div>
-            <div class="mls-scale-labels"><span>−25</span><span>−10</span><span>0</span><span>+10</span><span>+25 cm</span></div>
-            <div class="mls-note">Red = deficit — groundwater below normal (drought signal) · White = near-normal · Blue = surplus (recharge / flood conditions)</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(98,64,38,0.85) 0%,rgba(106,71,44,0.82) 5%,rgba(113,78,49,0.78) 10%,rgba(121,85,55,0.75) 15%,rgba(128,92,60,0.72) 20%,rgba(137,103,72,0.65) 25%,rgba(147,115,84,0.57) 30%,rgba(156,126,96,0.5) 35%,rgba(170,146,120,0.28) 40%,rgba(170,146,120,0) 40%,rgba(156,147,135,0) 45%,rgba(141,148,150,0) 50%,rgba(126,149,165,0) 55%,rgba(112,150,180,0) 60%,rgba(112,150,180,0.28) 60%,rgba(88,134,176,0.5) 65%,rgba(78,124,171,0.57) 70%,rgba(68,114,167,0.65) 75%,rgba(58,104,162,0.72) 80%,rgba(52,96,156,0.75) 85%,rgba(46,87,149,0.78) 90%,rgba(40,79,143,0.82) 95%,rgba(34,70,136,0.85) 100%)"></div>
+            <div class="mls-scale-labels"><span>−30</span><span>−15</span><span>−3</span><span>+3</span><span>+15</span><span>+30 cm</span></div>
+            <div class="mls-note">Brown = deficit (less water than the 2004–2009 baseline; drought signal) · transparent = within ±3 cm of normal · blue = surplus (recharge / flooding). Mascons over the ocean carry values too.</div>
           </div>
         </details>
 
@@ -780,10 +729,10 @@
           <summary><span>SMAP Root Zone</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
             <div class="mls-desc">NASA SMAP L4 root-zone soil moisture (0–100 cm depth). Passive microwave observations combined with a land-surface model. Daily product, ~3-day latency. Covers global ice-free land. Via NASA GIBS.</div>
-            <div class="mls-sub">Soil Moisture (m³/m³)</div>
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#c03000,#e08030,#f0d050,#80c040,#20a0e0,#0040b8)"></div>
-            <div class="mls-scale-labels"><span>0.02</span><span>0.1</span><span>0.2</span><span>0.35</span><span>0.5 m³/m³</span></div>
-            <div class="mls-note">Red = very dry · Yellow = dry · Green = moderate · Blue = wet / near-saturation</div>
+            <div class="mls-sub">Soil moisture (m³/m³)</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(104,72,44,0.82) 0%,rgba(113,80,51,0.8) 4.2%,rgba(122,88,57,0.79) 8.3%,rgba(131,96,64,0.77) 12.5%,rgba(140,104,70,0.75) 16.7%,rgba(145,115,83,0.72) 20.8%,rgba(150,125,96,0.69) 25%,rgba(155,136,109,0.65) 29.2%,rgba(160,146,122,0.62) 33.3%,rgba(150,146,127,0.62) 37.5%,rgba(140,146,131,0.62) 41.7%,rgba(130,146,136,0.62) 45.8%,rgba(120,146,140,0.62) 50%,rgba(109,144,140,0.65) 54.2%,rgba(98,142,140,0.67) 58.3%,rgba(87,140,140,0.69) 62.5%,rgba(76,138,140,0.72) 66.7%,rgba(68,132,137,0.74) 70.8%,rgba(60,126,133,0.76) 75%,rgba(52,120,130,0.78) 79.2%,rgba(44,114,126,0.8) 83.3%,rgba(39,107,121,0.82) 87.5%,rgba(34,100,116,0.84) 91.7%,rgba(29,93,111,0.86) 95.8%,rgba(24,86,106,0.88) 100%)"></div>
+            <div class="mls-scale-labels"><span>0.04</span><span>0.12</span><span>0.20</span><span>0.26</span><span>0.32</span><span>0.42</span><span>≥0.55</span></div>
+            <div class="mls-note">Brown = dry · grey-tan = moderate · teal = wet. GIBS's flat-grey top class (≥ 0.67 root zone, ≥ 0.58 surface; saturated or open water) is drawn in the wettest teal.</div>
           </div>
         </details>
 
@@ -792,10 +741,10 @@
           <summary><span>SMAP Surface</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
             <div class="mls-desc">NASA SMAP L3 surface soil moisture (0–5 cm). Daily passive microwave retrieval. Areas with frozen soil, dense vegetation, precipitation, or radio-frequency interference (RFI) are flagged as missing data. Via NASA GIBS.</div>
-            <div class="mls-sub">Soil Moisture (m³/m³)</div>
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#c03000,#e08030,#f0d050,#80c040,#20a0e0,#0040b8)"></div>
-            <div class="mls-scale-labels"><span>0.02</span><span>0.1</span><span>0.2</span><span>0.35</span><span>0.5 m³/m³</span></div>
-            <div class="mls-note">Red = very dry · Yellow = dry · Green = moderate · Blue = wet / near-saturation</div>
+            <div class="mls-sub">Soil moisture (m³/m³)</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(104,72,44,0.82) 0%,rgba(113,80,51,0.8) 4.2%,rgba(122,88,57,0.79) 8.3%,rgba(131,96,64,0.77) 12.5%,rgba(140,104,70,0.75) 16.7%,rgba(145,115,83,0.72) 20.8%,rgba(150,125,96,0.69) 25%,rgba(155,136,109,0.65) 29.2%,rgba(160,146,122,0.62) 33.3%,rgba(150,146,127,0.62) 37.5%,rgba(140,146,131,0.62) 41.7%,rgba(130,146,136,0.62) 45.8%,rgba(120,146,140,0.62) 50%,rgba(109,144,140,0.65) 54.2%,rgba(98,142,140,0.67) 58.3%,rgba(87,140,140,0.69) 62.5%,rgba(76,138,140,0.72) 66.7%,rgba(68,132,137,0.74) 70.8%,rgba(60,126,133,0.76) 75%,rgba(52,120,130,0.78) 79.2%,rgba(44,114,126,0.8) 83.3%,rgba(39,107,121,0.82) 87.5%,rgba(34,100,116,0.84) 91.7%,rgba(29,93,111,0.86) 95.8%,rgba(24,86,106,0.88) 100%)"></div>
+            <div class="mls-scale-labels"><span>0.04</span><span>0.12</span><span>0.20</span><span>0.26</span><span>0.32</span><span>0.42</span><span>≥0.55</span></div>
+            <div class="mls-note">Brown = dry · grey-tan = moderate · teal = wet. GIBS's flat-grey top class (≥ 0.67 root zone, ≥ 0.58 surface; saturated or open water) is drawn in the wettest teal.</div>
           </div>
         </details>
 
@@ -803,11 +752,11 @@
         <details class="mls-section">
           <summary><span>Sea Surface Temp</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
-            <div class="mls-desc">NASA/JPL MUR (Multi-scale Ultra-high Resolution) L4 sea surface temperature — a 1 km daily gap-free analysis blending infrared and microwave satellite retrievals with in-situ observations. Land and sea ice are masked out (shown black). Via NASA GIBS.</div>
+            <div class="mls-desc">NASA/JPL MUR (Multi-scale Ultra-high Resolution) L4 sea surface temperature — a 1 km daily gap-free analysis blending infrared and microwave satellite retrievals with in-situ observations. Land and sea ice are masked out (transparent). Via NASA GIBS.</div>
             <div class="mls-sub">Temperature (°C)</div>
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#2b001a 0%,#550249 6%,#750775 14%,#390a56 21%,#1e1e60 28%,#204291 36%,#266ebe 42%,#2ea3ef 50%,#19a735 57%,#99de00 64%,#ffd900 72%,#ff8900 79%,#e84c00 86%,#b51d00 93%,#6b0200 100%)"></div>
-            <div class="mls-scale-labels"><span>0</span><span>8</span><span>16</span><span>24</span><span>32 °C</span></div>
-            <div class="mls-note">Dark maroon/magenta = near freezing (0–5 °C) · purple to blue = cold · cyan = cool · green/yellow = temperate · orange to dark red = warm. The 26 °C+ orange band is the rough threshold for tropical cyclone fuel.</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(12,20,40,0.8) 0%,rgba(14,26,51,0.8) 5%,rgba(15,32,61,0.8) 10%,rgba(17,38,72,0.8) 15%,rgba(18,44,82,0.8) 20%,rgba(19,51,90,0.8) 25%,rgba(20,57,97,0.8) 30%,rgba(21,64,105,0.8) 35%,rgba(22,70,112,0.8) 40%,rgba(23,77,116,0.8) 45%,rgba(24,84,120,0.8) 50%,rgba(25,91,124,0.8) 55%,rgba(26,98,128,0.8) 60%,rgba(27,102,129,0.8) 65%,rgba(27,105,129,0.8) 70%,rgba(28,109,130,0.8) 75%,rgba(29,113,131,0.8) 79.4%,rgba(236,239,244,.95) 79.4%,rgba(236,239,244,.95) 80.6%,rgba(29,113,131,0.8) 80.6%,rgba(30,120,132,0.8) 85%,rgba(35,127,134,0.8) 90%,rgba(39,135,136,0.8) 95%,rgba(44,142,138,0.8) 100%)"></div>
+            <div class="mls-scale-labels"><span>0</span><span>10</span><span>18</span><span>24</span><span>26 TC</span><span>30 °C</span></div>
+            <div class="mls-note">Dark navy is cold water; lighter teal is warmer. The light rule at 26 °C marks the rough threshold of sea surface warm enough to fuel tropical cyclones. Land and sea ice are transparent.</div>
           </div>
         </details>
 
@@ -816,10 +765,10 @@
           <summary><span>Sea Ice Concentration</span><span class="mls-chevron">▾</span></summary>
           <div class="mls-content">
             <div class="mls-desc">NASA/JPL MUR sea ice concentration, the companion mask to the MUR SST analysis. Shows the fraction of each cell covered by ice. Best viewed at polar latitudes. Via NASA GIBS.</div>
-            <div class="mls-sub">Ice Cover (%)</div>
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#111111 0%,#630063 6%,#dc00dc 13%,#9c00ff 21%,#2a00ff 28%,#005aff 35%,#00e6ff 42%,#00de9c 49%,#00b115 57%,#62cb00 64%,#e1f500 71%,#ffa300 78%,#ff1c00 86%,#ff6f6f 93%,#ffffff 100%)"></div>
-            <div class="mls-scale-labels"><span>0</span><span>25</span><span>50</span><span>75</span><span>100%</span></div>
-            <div class="mls-note">Near-black = open water · purple/blue = sparse drift ice · cyan/green = broken pack · yellow/orange = dense pack · red to pink = near-solid · white = 100% consolidated.</div>
+            <div class="mls-sub">Ice cover (%)</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(150,168,188,0) 0%,rgba(150,168,188,0) 6.3%,rgba(150,168,188,0) 12.5%,rgba(150,168,188,0) 18.8%,rgba(150,168,188,0) 24.8%,rgba(150,168,188,0.45) 25%,rgba(159,176,195,0.51) 31.3%,rgba(168,184,202,0.57) 37.5%,rgba(177,192,209,0.64) 43.8%,rgba(186,200,216,0.7) 50%,rgba(195,208,222,0.74) 56.3%,rgba(204,215,228,0.77) 62.5%,rgba(213,223,234,0.81) 68.8%,rgba(222,230,240,0.85) 75%,rgba(229,235,243,0.88) 81.3%,rgba(235,240,246,0.9) 87.5%,rgba(242,245,249,0.92) 93.8%,rgba(248,250,252,0.95) 100%)"></div>
+            <div class="mls-scale-labels"><span>0</span><span>15</span><span>50</span><span>85</span><span>100 %</span></div>
+            <div class="mls-note">Transparent below 15 % (the conventional ice-edge threshold). Pale blue-grey is loose pack; white is 100 % consolidated ice.</div>
           </div>
         </details>
 
@@ -829,9 +778,9 @@
           <div class="mls-content">
             <div class="mls-desc">NASA OMPS aboard Suomi NPP — total column ozone, the full amount of ozone in a vertical column of atmosphere, measured in Dobson Units. Built from roughly 14 orbits per day, which together cover the whole sunlit globe. The composite is assembled as orbits downlink, so this layer is pinned two UTC days back, where coverage is complete.</div>
             <div class="mls-sub">Ozone (Dobson Units)</div>
-            <div class="mls-gradient-bar" style="background:linear-gradient(to right,#5e4fa2 0%,#4ca4b1 7%,#6bc4a4 16%,#90d2a4 24%,#b6e2a1 33%,#d7ef9b 41%,#edee93 49%,#fbe28c 58%,#fdcb79 66%,#fdae61 75%,#f78a50 83%,#ef6744 92%,#9e0142 100%)"></div>
-            <div class="mls-scale-labels"><span>100</span><span>200</span><span>300</span><span>400</span><span>500 DU</span></div>
-            <div class="mls-note">Purple/teal = depleted · green/yellow = typical (about 300 DU) · orange/red = ozone-rich. Below roughly 220 DU is the conventional threshold for &ldquo;ozone hole&rdquo; conditions, seen over Antarctica in austral spring.</div>
+            <div class="mls-gradient-bar" style="background:linear-gradient(to right,rgba(60,28,122,0.88) 0%,rgba(67,35,129,0.86) 6.3%,rgba(73,42,136,0.83) 12.5%,rgba(80,50,144,0.81) 18.8%,rgba(82,52,146,0.8) 20.8%,rgba(100,76,158,0.7) 24.4%,rgba(236,239,244,.95) 24.4%,rgba(236,239,244,.95) 25.6%,rgba(100,76,158,0.7) 25.6%,rgba(124,108,168,0.5) 31.3%,rgba(131,118,171,0.45) 37.5%,rgba(139,128,175,0.39) 43.8%,rgba(146,138,178,0.34) 50%,rgba(153,146,183,0.32) 56.3%,rgba(159,153,187,0.29) 62.5%,rgba(166,161,192,0.27) 68.8%,rgba(172,168,196,0.24) 75%,rgba(178,175,201,0.22) 81.3%,rgba(184,181,205,0.21) 87.5%,rgba(190,188,210,0.2) 93.8%,rgba(196,194,214,0.18) 100%)"></div>
+            <div class="mls-scale-labels"><span>100</span><span>220 hole</span><span>300</span><span>400</span><span>500 DU</span></div>
+            <div class="mls-note">A single violet ramp. The deepest, most opaque violet is depleted ozone: below the 220 DU rule is the conventional "ozone hole" threshold, seen over Antarctica in austral spring. Typical values (about 300 DU) are faint, and ozone-rich air fades toward transparent.</div>
           </div>
         </details>
 
@@ -855,13 +804,7 @@
             <div class="mls-desc">Observed wind from ~5,600 airport weather stations (METAR) and ~900 ocean buoys (NDBC) worldwide, via Esri Living Atlas; reports older than 3 hours are hidden. One barb per area of the map: the station nearest its centre. Zoom in to see more stations, or search a station code (e.g. KLNK). Click a barb for temperature, dew point, pressure, visibility and sky; buoys add waves and water temperature.</div>
             <div class="mls-sub">Reading a barb</div>
             <div class="mls-note">The staff points <b>into</b> the wind (the direction it is blowing from). Half barb = 5 kt · full barb = 10 kt · solid pennant = 50 kt · open circle = calm, or variable with no set direction.</div>
-            <div class="mls-sub">Speed (knots)</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#a7c080"></span> Light — under 11 kt</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#dbbc7f"></span> Moderate — 11–21 kt</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e69875"></span> Strong — 22–33 kt</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#e67e80"></span> Gale — 34–47 kt</div>
-            <div class="mls-swatch-row"><span class="mls-swatch sq" style="background:#d699b6"></span> Storm force — 48 kt+</div>
-            <div class="mls-note">Barbs carry a dark outline so they stay readable over both the dark basemap and satellite imagery.</div>
+            <div class="mls-note">Barbs are drawn in a single off-white with a dark outline, the usual meteorological style: speed is read from the barbs themselves, and the popup gives the exact value.</div>
           </div>
         </details>
 

@@ -8,8 +8,18 @@ overlays, with no build step and no backend beyond a tiny CORS relay.
 
 ## Features
 
-- **Interactive Leaflet map** with Esri dark and satellite basemaps, 35
+- **Interactive Leaflet map** with Esri dark and satellite basemaps, 37
   toggleable overlays, and click-to-locate from every sidebar row.
+- **Overlays designed to combine.** Layers are grouped by task (alerts,
+  tropical, outlooks, observations, hazard events, radar, satellite imagery,
+  ocean, land, atmosphere), and **scenes** switch on tested combinations
+  (severe weather, tropical, winter, fire, flood, geohazards, ocean, Europe).
+  Only one colour-field layer shows at a time; while one is on, alert and
+  outlook areas become outlines. Alerts share one severity scale with the
+  product type shown by line style, and every point layer has its own shape.
+- **Satellite imagery** from GOES-West, GOES-East, Himawari and Meteosat:
+  infrared as "clouds only" (combines with anything) or in the providers'
+  enhanced colours, plus Air Mass RGB for upper-air moisture and GeoColor.
 - **Cross-source alert index.** European (Meteoalarm), global (WMO, GDACS)
   and regional alerts are normalized into one store and rendered as
   per-country panels grouped by continent and sub-region, sorted by severity. US NWS alerts are grouped per region.
@@ -86,7 +96,7 @@ redistribution.
 | [DWD GeoServer](https://maps.dwd.de/) | German radar composite (WMS) | Deutscher Wetterdienst | [DWD open data](https://www.dwd.de/EN/service/copyright/copyright_node.html), attribution required, provided on map |
 | [FMI Open Data](https://en.ilmatieteenlaitos.fi/open-data) | Finnish radar composite (WMS) | Finnish Meteorological Institute | [CC BY 4.0](https://en.ilmatieteenlaitos.fi/open-data-licence) |
 | [EUMETView](https://view.eumetsat.int/) | Meteosat MTG-I FCI infrared, full disk (WMS) | EUMETSAT | [EUMETSAT data policy](https://www.eumetsat.int/eumetsat-data-licensing) |
-| [NASA GIBS](https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs) | IMERG precipitation (NASA GPM); GOES-East and GOES-West infrared (NOAA/NESDIS); Himawari infrared (JMA); GRACE-FO groundwater (NASA/JPL); SMAP root-zone and surface soil moisture (NASA); GHRSST MUR sea surface temperature and sea ice (NASA/JPL PO.DAAC); OMPS ozone and OMI sulfur dioxide (NASA GSFC) | NASA EOSDIS, with the originating agencies credited per layer | NASA open data; GIBS [usage guidelines](https://nasa-gibs.github.io/gibs-api-docs/) |
+| [NASA GIBS](https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs) | IMERG precipitation (NASA GPM); GOES-East and GOES-West infrared, Air Mass RGB and GeoColor (NOAA/NESDIS); Himawari infrared and Air Mass RGB (JMA); GRACE-FO groundwater (NASA/JPL); SMAP root-zone and surface soil moisture (NASA); GHRSST MUR sea surface temperature and sea ice (NASA/JPL PO.DAAC); OMPS ozone and OMI sulfur dioxide (NASA GSFC) | NASA EOSDIS, with the originating agencies credited per layer | NASA open data; GIBS [usage guidelines](https://nasa-gibs.github.io/gibs-api-docs/) |
 
 ### Basemaps, geocoding and libraries
 
