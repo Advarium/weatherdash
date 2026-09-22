@@ -2926,12 +2926,17 @@ function plotGauges() {
 let droughtData = null;
 
 const DM_LEVELS = [
-  // Official USDM colours. D4's dark red gets a lighter outline (edge) to show on the dark map.
-  { dm:0, label:'D0 — Abnormally Dry',    color:'#ffff00', bg:'#3b3a1f' },
-  { dm:1, label:'D1 — Moderate Drought',  color:'#fcd37f', bg:'#3d3526' },
-  { dm:2, label:'D2 — Severe Drought',    color:'#ffaa00', bg:'#3d3020' },
-  { dm:3, label:'D3 — Extreme Drought',   color:'#e60000', bg:'#3d2222' },
-  { dm:4, label:'D4 — Exceptional Drought',color:'#730000', edge:'#c0392b', bg:'#331a1a' },
+  /* USDM's yellow → orange → red order, adapted for the dark basemap. The
+     official D3/D4 (#e60000, #730000) get darker toward the top of the scale,
+     which works on white but on dark grey made D4 look like "no drought". Here
+     the worst levels are the most saturated and the most opaque. The areas are
+     nested (a D4 area also sits inside D3, D2…), so each level's higher
+     opacity lets it cover the ones beneath it. */
+  { dm:0, label:'D0 — Abnormally Dry',    color:'#f4e04d', fill:0.30, bg:'#3b3a1f' },
+  { dm:1, label:'D1 — Moderate Drought',  color:'#f6b74a', fill:0.42, bg:'#3d3526' },
+  { dm:2, label:'D2 — Severe Drought',    color:'#f07c1e', fill:0.50, bg:'#3d3020' },
+  { dm:3, label:'D3 — Extreme Drought',   color:'#e0352b', fill:0.58, bg:'#3d2222' },
+  { dm:4, label:'D4 — Exceptional Drought',color:'#c2185b', fill:0.68, bg:'#3a1a28' },
 ];
 
 async function loadDrought() {
@@ -2952,11 +2957,11 @@ function plotDrought() {
     style: feature => {
       const level = DM_LEVELS.find(entry => entry.dm === feature.properties?.DM);
       return {
-        color:       level?.edge || level?.color || '#859289',
-        weight:      1,
-        opacity:     0.85,
+        color:       level?.color || '#859289',
+        weight:      1.2,
+        opacity:     0.95,
         fillColor:   level?.color || '#859289',
-        fillOpacity: 0.22,
+        fillOpacity: level?.fill ?? 0.3,
         field:       true,
       };
     },
