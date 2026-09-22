@@ -2517,6 +2517,171 @@ function xmlLocalText(el, lname) {
   return child ? child.textContent.trim() : '';
 }
 
+/* ── GDACS per-type popup rows ─────────────────────────────────────
+   <gdacs:severity> and <gdacs:population> mean different things for each
+   event type, and the numeric value attribute has no unit on its own:
+     EQ  severity = magnitude + depth      population = people exposed at an MMI level
+     TC  severity = max wind (km/h)        population = people in Cat 1+ winds (+ TS winds)
+     FL  severity = placeholder, always 0  population = deaths (+ displaced)
+     DR  severity = drought area (km²)     population = always empty
+     WF  severity = burned area (ha)       population = people in the fire area
+     VO  severity = empty                  population = exposure description
+   Tsunamis are never published as their own TS item: GDACS attaches them to
+   the triggering earthquake and sets <calculationtype>tsunami</calculationtype>.
+   The modelled wave height is only in the event API, fetched when the popup opens. */
+
+// Raw {value, unit, text} of a <gdacs:severity>/<gdacs:population> element
+function gdacsMeasure(el) {
+  return {
+    value: parseFloat(el?.getAttribute('value')) || 0,
+    unit:  el?.getAttribute('unit') || '',
+    text:  el?.textContent.trim() || '',
+  };
+}
+
+const gdacsInt = n => Math.round(n).toLocaleString();
+
+function gdacsDate(str) {
+  const parsed = new Date(str);
+  return isNaN(parsed) ? str : parsed.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+}
+
+function gdacsPeriod(from, to) {
+  if (!from) return '';
+  const start = gdacsDate(from), end = to ? gdacsDate(to) : '';
+  return end && end !== start ? `${start} – ${end}` : start;
+}
+
+// Saffir-Simpson class from 1-minute sustained wind. GDACS's value attribute is
+// an exact knot conversion and agrees with the item description; the severity
+// text frequently quotes a different speed, so it is not used.
+function gdacsCycloneClass(kmh) {
+  const kt = kmh / 1.852;
+  if (kt < 34)  return 'Tropical Depression';
+  if (kt < 64)  return 'Tropical Storm';
+  if (kt < 83)  return 'Category 1';
+  if (kt < 96)  return 'Category 2';
+  if (kt < 113) return 'Category 3';
+  if (kt < 137) return 'Category 4';
+  return 'Category 5';
+}
+
+const MMI_SHAKING = {
+  I:'not felt', II:'weak', III:'weak', IV:'light', V:'moderate', VI:'strong',
+  VII:'very strong', VIII:'severe', IX:'violent', X:'extreme', XI:'extreme', XII:'extreme',
+};
+
+// "90 thousand in MMI V" / "2 thousand (in MMI>=VII)" / "Few people affected in MMI -"
+function gdacsShakingExposure(text) {
+  const match = text.match(/^(.*?)\s*\(?in MMI\s*(>=)?\s*([IVX]+|-)\s*\)?\.?$/);
+  if (!match) return text;
+  const [, who, atLeast, mmi] = match;
+  if (mmi === '-') return who;
+  const people = /^[\d.]+\s*(thousand|million)?$/.test(who) ? `${who} people` : who;
+  return `${people} · MMI ${atLeast ? '≥' : ''}${mmi} (${MMI_SHAKING[mmi] || '?'}${atLeast ? '+' : ''} shaking)`;
+}
+
+const GDACS_ROWS = {
+  EQ(event) {
+    const quake = event.sev.text.match(/Magnitude\s+([\d.]+)\s*M?.*?Depth:\s*([\d.]+)\s*km/i);
+    const rows = [
+      ['Magnitude', quake ? `M ${quake[1]}` : (event.sev.value ? `M ${event.sev.value}` : '')],
+      ['Depth',     quake ? `${+parseFloat(quake[2]).toFixed(1)} km` : ''],
+      ['Exposed',   gdacsShakingExposure(event.pop.text)],
+      ['Occurred',  event.fromdate ? fmtTime(event.fromdate) : ''],
+    ];
+    if (event.calctype === 'tsunami') rows.push(['Tsunami', 'Checking model…', 'gdacs-tsunami']);
+    return rows;
+  },
+  TC(event) {
+    const kmh = event.sev.value;
+    // "…wind speeds or higher is 0 (0.768 million in Tropical Storm)"
+    const tsWinds = event.pop.text.match(/\(([^()]*?)\s+in Tropical Storm\)/i)?.[1];
+    return [
+      ['Max wind',      kmh ? `${gdacsInt(kmh)} km/h · ${gdacsCycloneClass(kmh)}` : ''],
+      ['In Cat 1+ winds', event.pop.text ? `${gdacsInt(event.pop.value)} people` : ''],
+      ['In storm-force winds', tsWinds ? `${tsWinds} people` : ''],
+      ['Vulnerability', event.vulnerability],
+      ['Active',        gdacsPeriod(event.fromdate, event.todate)],
+    ];
+  },
+  FL(event) {
+    const deaths    = event.pop.text.match(/([\d,]+)\s+deaths?/i)?.[1];
+    const displaced = event.pop.text.match(/([\d,]+)\s+displaced/i)?.[1];
+    return [
+      ['Deaths',    deaths ?? ''],
+      ['Displaced', displaced && displaced !== '0' ? displaced : ''],
+      ['Period',    gdacsPeriod(event.fromdate, event.todate)],
+    ];
+  },
+  DR(event) {
+    // "Medium impact for agricultural drought in 196893 km2"
+    const impact = event.sev.text.match(/^(\w+) impact for (\w+) drought/i);
+    const weeks  = parseInt(event.durationweeks, 10);
+    return [
+      ['Impact',   impact ? `${impact[1]} (${impact[2]})` : ''],
+      ['Area',     event.sev.value ? `${gdacsInt(event.sev.value)} km²` : ''],
+      ['Duration', weeks > 0 ? `${weeks} week${weeks === 1 ? '' : 's'}` : ''],
+      ['Since',    event.fromdate ? gdacsDate(event.fromdate) : ''],
+    ];
+  },
+  WF(event) {
+    return [
+      ['Burned area',    event.sev.value ? `${gdacsInt(event.sev.value)} ha` : ''],
+      ['People in area', event.pop.text ? gdacsInt(event.pop.value) : ''],
+      ['Period',         gdacsPeriod(event.fromdate, event.todate)],
+    ];
+  },
+  VO(event) {
+    return [
+      ['Activity', event.description],
+      ['Exposure', event.pop.text],
+      ['Reported', event.fromdate ? gdacsDate(event.fromdate) : ''],
+    ];
+  },
+};
+// Tsunami items have never appeared in the feed (GDACS models tsunamis under
+// the EQ event), but if one does, it carries the same quake fields.
+GDACS_ROWS.TS = GDACS_ROWS.EQ;
+
+// Fallback for any unrecognised type: the readable text, or value + unit
+function gdacsGenericRows(event) {
+  const describe = ({ text, value, unit }) =>
+    text && !/^Magnitude 0\s*$/i.test(text) ? text : (value ? `${value} ${unit}`.trim() : '');
+  return [
+    ['Severity', describe(event.sev)],
+    ['Impact',   describe(event.pop)],
+    ['Period',   gdacsPeriod(event.fromdate, event.todate)],
+  ];
+}
+
+function gdacsRows(event) {
+  return (GDACS_ROWS[event.type] || gdacsGenericRows)(event).filter(([, value]) => value);
+}
+
+// Modelled max tsunami height lives only in the event API (earthquakedetails.tsmaxheight)
+const gdacsTsunamiCache = new Map();
+async function fillGDACSTsunami(event, popupEl) {
+  const cell = popupEl?.querySelector('.gdacs-tsunami');
+  if (!cell || !event.eventid) return;
+  try {
+    if (!gdacsTsunamiCache.has(event.eventid)) {
+      const url = `https://www.gdacs.org/gdacsapi/api/events/geteventdata?eventtype=EQ&eventid=${encodeURIComponent(event.eventid)}`;
+      const response = await fetch(proxyUrl(url), { signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      gdacsTsunamiCache.set(event.eventid, parseFloat(data?.properties?.earthquakedetails?.tsmaxheight));
+    }
+    const height = gdacsTsunamiCache.get(event.eventid);
+    cell.textContent = isNaN(height) ? 'Modelled, no height available'
+      : height > 0 ? `Max modelled wave ${height.toFixed(2)} m`
+      : 'No significant wave modelled';
+  } catch (err) {
+    console.warn('GDACS tsunami lookup failed:', err.message);
+    cell.textContent = 'Modelled, see GDACS details';
+  }
+}
+
 async function loadGDACS() {
   gdacsData = [];
   try {
@@ -2531,10 +2696,14 @@ async function loadGDACS() {
       const name     = xmlLocalText(item, 'eventname') || item.querySelector('title')?.textContent?.trim() || '';
       const country  = xmlLocalText(item, 'country');
       const todate   = xmlLocalText(item, 'todate');
-      const sevEl    = xmlLocal(item, 'severity');
-      const sevVal   = sevEl?.getAttribute('value') || sevEl?.textContent?.trim() || '';
-      const popEl    = xmlLocal(item, 'population');
-      const popVal   = popEl?.getAttribute('value') || popEl?.textContent?.trim() || '';
+      const fromdate = xmlLocalText(item, 'fromdate');
+      const eventid  = xmlLocalText(item, 'eventid');
+      const calctype = xmlLocalText(item, 'calculationtype');
+      const durationweeks = xmlLocalText(item, 'durationinweek');
+      const vulnerability = xmlLocalText(item, 'vulnerability');
+      const description   = item.querySelector('description')?.textContent?.trim() || '';
+      const sev      = gdacsMeasure(xmlLocal(item, 'severity'));
+      const pop      = gdacsMeasure(xmlLocal(item, 'population'));
       const guid     = item.querySelector('guid')?.textContent?.trim() || '';
       const link     = item.querySelector('link')?.textContent?.trim() || '';
       // georss:point → "lat lon"
@@ -2544,7 +2713,8 @@ async function loadGDACS() {
         const parts = ptEl.textContent.trim().split(/\s+/);
         if (parts.length >= 2) { lat = parseFloat(parts[0]); lon = parseFloat(parts[1]); }
       }
-      return { type, level, name, country, todate, sevVal, popVal, guid, link, lat, lon };
+      return { type, level, name, country, fromdate, todate, eventid, calctype, durationweeks,
+               vulnerability, description, sev, pop, guid, link, lat, lon };
     }).filter(event => event.type);
   } catch (err) {
     console.warn('GDACS load failed:', err.message);
@@ -2586,11 +2756,13 @@ function plotGDACS() {
       <div class="popup-row"><span>Type</span><span>${esc(lbl)}</span></div>
       <div class="popup-row"><span>Alert</span><span style="color:${col};font-weight:600">${esc(event.level)}</span></div>
       ${event.country  ? `<div class="popup-row"><span>Country</span><span>${esc(event.country)}</span></div>` : ''}
-      ${event.popVal   ? `<div class="popup-row"><span>Affected</span><span>${esc(event.popVal)}</span></div>` : ''}
-      ${event.sevVal   ? `<div class="popup-row"><span>Severity</span><span>${esc(event.sevVal)}</span></div>` : ''}
-      ${event.todate   ? `<div class="popup-row"><span>Updated</span><span>${fmtTime(event.todate)}</span></div>` : ''}
+      ${gdacsRows(event).map(([label, value, cls]) =>
+        `<div class="popup-row"><span>${esc(label)}</span><span${cls ? ` class="${cls}"` : ''}>${esc(value)}</span></div>`).join('')}
       ${event.link     ? `<div class="popup-row"><a href="${esc(event.link)}" target="_blank" rel="noopener">GDACS Details ↗</a></div>` : ''}
     </div>`);
+    if (event.calctype === 'tsunami') {
+      marker.on('popupopen', popupEvent => fillGDACSTsunami(event, popupEvent.popup.getElement()));
+    }
     gdacsLayer.addLayer(marker);
   });
 }
