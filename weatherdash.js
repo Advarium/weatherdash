@@ -4874,7 +4874,7 @@ function normalizeMeteoalarm(data) {
     expires:  warning.expires,
     centLat:  warning.centLat,
     centLon:  warning.centLon,
-    flyFn:    warning.centLat != null ? `flyToMeteo('${warning.id.replace(/'/g,"\\'")}')` : null,
+    flyFn:    warning.centLat != null ? `flyToMeteo('${warning.id.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}')` : null,
   }));
 }
 
