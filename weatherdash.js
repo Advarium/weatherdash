@@ -309,6 +309,35 @@ function initMap() {
   _updateMinZoom();
   map.on('resize', _updateMinZoom);
 
+  /* Popups near the ±180° edge: Leaflet's autoPan tries to pan the map to fit
+     the popup, maxBounds (viscosity 1) snaps it straight back, and the popup is
+     left hanging off the map. Instead, slide the popup box sideways to fit and
+     leave its tip on the marker. A marker within a few pixels of the edge would
+     leave the tip past the box's corner, so the tip is hidden there and the box
+     still moves fully inside. Re-run after every move, since the snap-back
+     lands after popupopen. */
+  function _fitPopupInMap() {
+    const popupEl = map._popup?.getElement();
+    if (!popupEl) return;
+    const box   = popupEl.querySelector('.leaflet-popup-content-wrapper');
+    const close = popupEl.querySelector('.leaflet-popup-close-button');
+    const tip   = popupEl.querySelector('.leaflet-popup-tip-container');
+    const parts = [box, close].filter(Boolean);
+    parts.forEach(el => { el.style.transform = ''; });
+    if (tip) tip.style.visibility = '';
+
+    const pad     = 8;
+    const mapRect = map.getContainer().getBoundingClientRect();
+    const boxRect = box.getBoundingClientRect();
+    let shift = 0;
+    if (boxRect.left < mapRect.left + pad)        shift = mapRect.left + pad - boxRect.left;
+    else if (boxRect.right > mapRect.right - pad) shift = mapRect.right - pad - boxRect.right;
+    // The tip only stays attached while it sits under the box, clear of the rounded corners
+    if (tip && Math.abs(shift) > boxRect.width / 2 - 24) tip.style.visibility = 'hidden';
+    if (shift) parts.forEach(el => { el.style.transform = `translateX(${Math.round(shift)}px)`; });
+  }
+  map.on('popupopen moveend zoomend resize', _fitPopupInMap);
+
   // Basemap layers — swappable via header toggle
   // Esri Dark Gray Canvas: keyless, same provider as baseSat. Tile path is
   // {z}/{y}/{x} with no file extension.
