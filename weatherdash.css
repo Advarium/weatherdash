@@ -1706,9 +1706,6 @@
     }
     .map-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-    /* ── Sidebar ────────────────────────────────────── */
-    /* .sidebar removed — panels moved to .panel-grid */
-
     /* ── Generic panel ──────────────────────────────── */
     .panel {
       background: var(--surface);
@@ -2385,8 +2382,8 @@
       .panel-grid { grid-template-columns: 1fr; }
       .panel-grid .panel { height: 320px; }
 
-      /* The layers (190px) and legend (240px) sidebars together demand 430px —
-         wider than the viewport, which is why the map was reduced to a sliver.
+      /* The layers (190px) and legend (240px) sidebars together need 430px,
+         wider than the viewport, which would squeeze the map to a sliver.
          They start collapsed to their 28px strips, and when opened they float
          OVER the map instead of taking layout width from it. */
       .map-panel { position: relative; }
@@ -2401,8 +2398,8 @@
 
       /* Five ticker panels across ~390px is ~78px each — unreadable stubs.
          Show two; the rotation still cycles through all five over time.
-         The "Happening Now" label also claimed ~43% of the row, so it goes —
-         the alert content speaks for itself. */
+         The "Happening Now" label would take ~43% of the row, so it is
+         hidden; the alert content speaks for itself. */
       .adb-panel:nth-child(n+3) { display: none; }
       .adb-label { display: none; }
 

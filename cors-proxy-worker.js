@@ -15,8 +15,8 @@
 
 // ── Allowlist ────────────────────────────────────────────────────────────────
 // Only hostnames listed here will be proxied. Add new sources here as needed.
-// These are the only three sources the dashboard still routes through the
-// proxy — everything else it loads serves CORS headers directly.
+// These are the only sources the dashboard routes through the proxy;
+// everything else it loads sends CORS headers itself.
 const ALLOWLIST = new Set([
   'feeds.meteoalarm.org',             // Meteoalarm Europe country feeds
   'severeweather.wmo.int',            // WMO SWIC global alerts (WFS)
