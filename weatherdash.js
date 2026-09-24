@@ -4691,8 +4691,8 @@ function wmoCountryFromCapurl(capurl) {
    "au-bom-en" prefix, so Australia is served from the same WFS as the rest
    of the world rather than from BOM's own (undocumented) app API. BOM tags
    most of those alerts with CAP severity 0 or 1, including active Severe
-   Weather Warnings, so the global "s>=2" filter would drop nearly all of
-   them and the fixed severity would mis-rank the rest. They are fetched
+   Weather Warnings, so the global queries (Moderate and above) would drop
+   nearly all of them and the fixed severity would mis-rank the rest. They are fetched
    with a separate query and re-graded from the event name and description. */
 const WMO_BOM_PREFIX = 'au-bom-en/';
 
@@ -4735,34 +4735,60 @@ async function loadWMO() {
     typeName:     'local_postgis:postgis_geojsons',
     outputFormat: 'application/json',
     CQL_FILTER:   cql,
+    // Without this the feature bbox comes back as lat,lon when propertyName
+    // leaves out the geometry; with it, bbox is always lon,lat.
+    srsName:      'EPSG:4326',
     ...extra,
   });
-  // Global: severe+ land alerts, server-side filtered + sorted.
-  // Australia: every land alert from BOM, re-graded client-side (see above).
-  const globalParams = wfs("s>=2 AND marine='0' AND row_type<>'BOUNDARY'", { maxFeatures: '250', sortBy: 's D' });
-  const bomParams    = wfs(`capurl LIKE '${WMO_BOM_PREFIX}%' AND marine='0' AND row_type<>'BOUNDARY'`, { maxFeatures: '200' });
-  try {
-    const [globalRes, bomRes] = await Promise.all([
-      fetch(proxyUrl(`${base}?${globalParams}`), { signal: AbortSignal.timeout(20000) }),
-      fetch(proxyUrl(`${base}?${bomParams}`),    { signal: AbortSignal.timeout(20000) })
-        .then(response => response.ok ? response.json() : null)
-        .catch(() => null),   // Australia is additive; a failure must not sink the global feed
-    ]);
-    if (!globalRes.ok) throw new Error(`HTTP ${globalRes.status}`);
-    const geojson = await globalRes.json();
-    if (!Array.isArray(geojson.features)) throw new Error('Unexpected response shape');
-    const features = [...geojson.features, ...(bomRes?.features || [])];
+  const LAND = "marine='0' AND row_type<>'BOUNDARY'";
 
-    // Deduplicate by capurl — keep best geometry type (POLYGON/MULTIPOLYGON > POINT)
+  /* One request per severity level, each with its own cap. A single capped
+     "s>=2 sorted by severity" query lets one busy country fill the whole cap
+     with Extreme alerts and crowd out every other country's Severe ones. The
+     caps count features, not alerts: an alert split into several polygons
+     returns one feature per polygon (often 2–3 per alert).
+     Moderate alerts are never drawn on the map (see plotWMO), so that level
+     skips the geometry: ~1 MB instead of ~15 MB. */
+  const MODERATE_FIELDS = 'capurl,areadesc,event,s,u,c,onset,effective,sent,expires,chk_expires,row_type';
+  const levels = [
+    { name: 'Extreme',  params: wfs(`s=4 AND ${LAND}`, { maxFeatures: '1000' }), required: true },
+    { name: 'Severe',   params: wfs(`s=3 AND ${LAND}`, { maxFeatures: '2500' }), required: true },
+    { name: 'Moderate', params: wfs(`s=2 AND ${LAND}`, { maxFeatures: '5000', propertyName: MODERATE_FIELDS }) },
+    // Australia: every land alert from BOM, re-graded client-side (see above)
+    { name: 'BOM',      params: wfs(`capurl LIKE '${WMO_BOM_PREFIX}%' AND ${LAND}`, { maxFeatures: '1000' }) },
+  ];
+  const fetchLevel = async ({ params }) => {
+    const response = await fetch(proxyUrl(`${base}?${params}`), { signal: AbortSignal.timeout(20000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const geojson = await response.json();
+    if (!Array.isArray(geojson.features)) throw new Error('Unexpected response shape');
+    return geojson.features;
+  };
+  try {
+    const results = await Promise.allSettled(levels.map(fetchLevel));
+    const features = [];
+    results.forEach((result, i) => {
+      const level = levels[i];
+      if (result.status === 'rejected') {
+        // Extreme and Severe are the core of the feed; Moderate and BOM only add to it
+        if (level.required) throw new Error(`${level.name}: ${result.reason?.message || result.reason}`);
+        console.warn(`WMO ${level.name} alerts skipped:`, result.reason?.message || result.reason);
+        return;
+      }
+      if (result.value.length >= +level.params.get('maxFeatures')) {
+        console.warn(`WMO ${level.name} alerts hit the ${level.params.get('maxFeatures')}-feature cap; some are missing`);
+      }
+      features.push(...result.value);
+    });
+
+    // Deduplicate by capurl (BOM alerts rated s>=2 arrive twice). Keep the copy
+    // with the best geometry: polygon > point > none.
     const geomRank = { POLYGON: 2, MULTIPOLYGON: 2, POINT: 1 };
+    const rankOf = feature => feature.geometry ? (geomRank[feature.properties.row_type] ?? 0) : -1;
     const seen = new Map();
     for (const feature of features) {
-      const props = feature.properties;
-      const key = props.capurl || feature.id;
-      const rank = geomRank[props.row_type] ?? 0;
-      if (!seen.has(key) || rank > (geomRank[seen.get(key).properties.row_type] ?? 0)) {
-        seen.set(key, feature);
-      }
+      const key = feature.properties.capurl || feature.id;
+      if (!seen.has(key) || rankOf(feature) > rankOf(seen.get(key))) seen.set(key, feature);
     }
 
     wmoData = [...seen.values()].map(feature => {
