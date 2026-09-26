@@ -718,22 +718,38 @@ function paletteLegendHTML(name) {
    red (−60 to −70 °C) and magenta (below −81 °C) bands, while warm greys sit
    next to the cyan and blue (−19 to −31 °C) of ordinary cloud.
 
-   So each ambiguous grey pixel counts the warm and cold "votes" among
-   unambiguous pixels in a square window around it and takes the majority.
-   This repeats with a growing window so pixels resolved in one pass vote in
-   the next. A grey with no evidence anywhere in reach stays warm: that is the
-   common case, and the safe one, since warm renders near-transparent rather
-   than as a bright false cloud. A final pass flips any grey that disagrees
-   with at least 5 of its 8 neighbours. */
+   So cold is flood-filled outward from the coloured cold pixels (red, pink,
+   magenta): an ambiguous grey turns cold only when it touches a cold pixel
+   (8-connected) whose temperature is within maxColdStepC of the grey's cold
+   reading. White and the brightest greys can only be cold, but they are not
+   seeds: the scan-line noise along the disc limb is drawn in them, next to
+   ordinary warm greys, and resampling blends the two into a smooth ladder
+   the fill would walk straight down. They count as cold when the fill
+   reaches them; the rest are dropped and filled from their neighbours.
+   Low-zoom tiles are averaged from the native ones, which blends small cold
+   cores into the warm ground around them as a smooth grey ramp that the
+   fill can also walk down. So each region the fill makes is checked by its
+   border: a real cold area is ringed by red/pink, a leak mostly by warmer
+   cloud colours. Leaks revert to warm beyond keepDepthPx of their seeds. In the provider's table
+   the cold greys continue the ramp between dark red (−69.6 °C) and pink
+   (−80.6 °C), so a genuine cold core joins its rim in steps of about 1 °C,
+   and the fill then follows the grey gradient into the core. Warm greys
+   reach cold cloud only through the long cyan…red ramp, so a warm area
+   next to cold cloud sits many degrees away from it and is never entered.
+   (An earlier majority vote in a growing window did enter them: warm greys
+   cast no votes, so one cold pixel could claim a whole clear-sky tile.)
+   A grey the fill doesn't reach stays warm: that is the common case, and
+   the safe one, since warm renders near-transparent rather than as a bright
+   false cloud. A final pass flips any grey that disagrees with at least 5 of
+   its 8 neighbours. */
 const IR_GREY_RULES = {
   coldGreyMinC: -81, coldGreyMaxC: -69,  // colormap greys in this range form the cold set
   warmGreyMinC: -20,                     // colormap greys at or above this form the warm set
-  ambiguousMaxLevel: 213,                // pixel greys brighter than this can only be cold
-  coldEvidenceMaxC: -58,                 // a non-grey pixel this cold or colder votes cold
-  warmEvidenceMinC: -36,                 // a non-grey pixel this warm or warmer votes warm
-  startRadius: 4,                        // voting window half-width (px) on the first pass…
-  maxRadius: 32,                         // …doubling every second pass, up to this
-  maxPasses: 10,
+  ambiguousMaxLevel: 213,                // pixel greys brighter than this can only be cold (or limb noise)
+  coldEvidenceMaxC: -58,                 // a non-grey pixel this cold or colder seeds the cold fill
+  warmEvidenceMinC: -36,                 // a non-grey pixel this warm or warmer counts as warm (despeckle)
+  maxColdStepC: 3,                       // largest temperature step the cold fill crosses between neighbours
+  keepDepthPx: 2,                        // a region judged a leak stays cold this close to its seeds
 };
 
 const RasterRecolorEngine = (() => {
@@ -744,6 +760,7 @@ const RasterRecolorEngine = (() => {
   const COLD_VOTE      = 2;   // unambiguous and cold enough to count as cold evidence
   const AMBIGUOUS_GREY = 3;   // IR grey that could be warm or cold
   const PLAIN          = 4;   // unambiguous, casts no vote
+  const BRIGHT_GREY    = 5;   // IR white or bright grey: cold if the cold fill reaches it, else dropped
 
   // Pixels are written as 32-bit words (4 bytes at once). The byte order
   // inside a word follows the platform's endianness.
@@ -829,6 +846,7 @@ const RasterRecolorEngine = (() => {
       entryIdByColor: new Map(),   // 0xRRGGBB → entry id
       entryOutput: [],             // packed output colour (for greys: the warm reading)
       entryClass: [],              // REJECTED … PLAIN
+      entryValue: [],              // data value (for greys: the cold reading; NaN when rejected)
       entryGreyOptions: [],        // AMBIGUOUS_GREY only: { warm, cold } packed colours
       cacheHits: 0, cacheMisses: 0,
       debugColors: false,          // see debugColor()
@@ -845,17 +863,20 @@ const RasterRecolorEngine = (() => {
     let entry = colormap.entryByColor.get(colorKey), distanceSq = 0;
     if (entry === undefined) [entry, distanceSq] = nearestEntry(colormap, r, g, b);
 
-    let output = 0, pixelClass = REJECTED, greyOptions = null;
+    let output = 0, pixelClass = REJECTED, greyOptions = null, value = NaN;
     if (entry >= 0 && distanceSq <= engine.maxDistanceSq) {
-      const value = colormap.values[entry];
+      value = colormap.values[entry];
       const entryIsGrey = !!greyRules && isGreyEntry(colormap, entry);
       if (entryIsGrey && (r + g + b) / 3 <= greyRules.ambiguousMaxLevel) {
         // Could be warm or cold: keep both colours and decide per pixel
         const warm = engine.colorForValue(colormap.values[nearestEntry(colormap, r, g, b, engine.warmGreyEntries)[0]]);
-        const cold = engine.colorForValue(colormap.values[nearestEntry(colormap, r, g, b, engine.coldGreyEntries)[0]]);
+        value = colormap.values[nearestEntry(colormap, r, g, b, engine.coldGreyEntries)[0]];
+        const cold = engine.colorForValue(value);
         output = warm; pixelClass = AMBIGUOUS_GREY; greyOptions = { warm, cold };
       } else if (entryIsGrey) {
-        output = engine.colorForValue(value); pixelClass = COLD_VOTE;   // bright greys and white only occur in the cold range
+        // Bright greys and white only occur in the cold range, but noise at
+        // the disc limb uses them too, so they must be reached by the fill
+        output = engine.colorForValue(value); pixelClass = BRIGHT_GREY;
       } else {
         output = engine.colorForValue(value);
         pixelClass = !greyRules ? PLAIN
@@ -868,70 +889,94 @@ const RasterRecolorEngine = (() => {
     const id = engine.entryOutput.length;
     engine.entryOutput.push(output);
     engine.entryClass.push(pixelClass);
+    engine.entryValue.push(value);
     engine.entryGreyOptions.push(greyOptions);
     engine.entryIdByColor.set(colorKey, id);
     return id;
   }
 
   /* Decide warm or cold for every ambiguous grey pixel (see IR_GREY_RULES).
-     Returns a per-pixel array: WARM_VOTE, COLD_VOTE, or 0 for "no evidence"
-     (drawn as warm). */
+     Returns a per-pixel array: COLD_VOTE, WARM_VOTE (flipped by the
+     despeckle), or 0 for "not reached by the cold fill" (drawn as warm). */
   function resolveAmbiguousGreys(engine, entryIdOf, width, height, stats) {
-    const { entryClass, greyRules } = engine;
+    const { entryClass, entryValue, greyRules } = engine;
     const pixelCount = width * height;
+    const resolution = new Uint8Array(pixelCount);
 
-    // Every pixel's current vote. Ambiguous greys start at 0 and join in once resolved.
+    // Unambiguous pixels' votes (used by the despeckle), and the cold ones
+    // as seeds for the fill.
     const votes = new Uint8Array(pixelCount);
-    const ambiguousPixels = [];
+    const ambiguousPixels = [], brightPixels = [];
+    const queue = new Int32Array(pixelCount);   // each pixel enters at most once
+    let queueEnd = 0;
     for (let i = 0; i < pixelCount; i++) {
       const id = entryIdOf[i];
       if (id < 0) continue;
       const pixelClass = entryClass[id];
       if (pixelClass === WARM_VOTE || pixelClass === COLD_VOTE) votes[i] = pixelClass;
+      if (pixelClass === COLD_VOTE) queue[queueEnd++] = i;
       else if (pixelClass === AMBIGUOUS_GREY) ambiguousPixels.push(i);
+      else if (pixelClass === BRIGHT_GREY) brightPixels.push(i);
     }
-    const resolution = new Uint8Array(pixelCount);
 
-    // Summed-area tables of warm and cold votes: the votes inside any window
-    // are then four lookups, however large the window.
-    const stride = width + 1;
-    const warmSums = new Int32Array(stride * (height + 1)), coldSums = new Int32Array(stride * (height + 1));
-    const windowSum = (sums, x0, y0, x1, y1) => sums[y1 * stride + x1] - sums[y0 * stride + x1] - sums[y1 * stride + x0] + sums[y0 * stride + x0];
-
-    let unresolved = ambiguousPixels;
-    for (let pass = 0; pass < greyRules.maxPasses && unresolved.length; pass++) {
-      // The window grows 4, 4, 8, 8, 16, 16, 32…: edge pixels are decided
-      // locally, and the middle of a wide uniform grey area is still reached
-      // within a few passes.
-      const radius = Math.min(greyRules.maxRadius, greyRules.startRadius << (pass >> 1));
-      stats.votingPasses++;
-
-      for (let y = 0; y < height; y++) {
-        let rowWarm = 0, rowCold = 0;
-        for (let x = 0; x < width; x++) {
-          const vote = votes[y * width + x];
-          if (vote === WARM_VOTE) rowWarm++; else if (vote === COLD_VOTE) rowCold++;
-          warmSums[(y + 1) * stride + x + 1] = warmSums[y * stride + x + 1] + rowWarm;
-          coldSums[(y + 1) * stride + x + 1] = coldSums[y * stride + x + 1] + rowCold;
+    // Breadth-first cold fill: a grey joins when an 8-connected cold
+    // neighbour is within maxColdStepC of its cold reading. depth: steps
+    // from the nearest seed.
+    const maxStep = greyRules.maxColdStepC;
+    const depth = new Uint16Array(pixelCount);
+    for (let head = 0; head < queueEnd; head++) {
+      const i = queue[head], x = i % width, y = (i / width) | 0;
+      const fromValue = entryValue[entryIdOf[i]], nextDepth = Math.min(65535, depth[i] + 1);
+      for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny++) {
+        for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx++) {
+          const j = ny * width + nx, id = entryIdOf[j];
+          if (id < 0 || resolution[j]) continue;
+          const toClass = entryClass[id];
+          if (toClass !== AMBIGUOUS_GREY && toClass !== BRIGHT_GREY) continue;
+          if (Math.abs(entryValue[id] - fromValue) > maxStep) continue;
+          resolution[j] = COLD_VOTE;
+          depth[j] = nextDepth;
+          queue[queueEnd++] = j;
         }
       }
-
-      const stillUnresolved = [], decided = [];   // decided: flat [pixel, vote, pixel, vote, …]
-      for (const i of unresolved) {
-        const x = i % width, y = (i / width) | 0;
-        const x0 = Math.max(0, x - radius), x1 = Math.min(width, x + radius + 1);
-        const y0 = Math.max(0, y - radius), y1 = Math.min(height, y + radius + 1);
-        const warm = windowSum(warmSums, x0, y0, x1, y1), cold = windowSum(coldSums, x0, y0, x1, y1);
-        if (cold > warm)      { decided.push(i, COLD_VOTE); stats.greysVotedCold++; }
-        else if (warm > cold) { decided.push(i, WARM_VOTE); stats.greysVotedWarm++; }
-        else stillUnresolved.push(i);
-      }
-      // Applied after the pass, so every pixel in one pass sees the same votes
-      for (let k = 0; k < decided.length; k += 2) { votes[decided[k]] = decided[k + 1]; resolution[decided[k]] = decided[k + 1]; }
-      unresolved = stillUnresolved;
-      if (!decided.length && radius >= greyRules.maxRadius) break;   // the widest window found nothing new
     }
-    stats.greysDefaultedWarm = unresolved.length;
+
+    // Leak check. Each connected region the fill made is judged by what
+    // borders it: a real cold area is ringed by red/pink (cold evidence),
+    // while a fill that escaped along a blended grey ramp (common in the
+    // averaged low-zoom tiles) is bordered by warmer cloud colours and by
+    // greys it couldn't step into. A mostly warm-bordered region reverts to
+    // warm, except within keepDepthPx of its seeds so small cores survive.
+    const visited = new Uint8Array(pixelCount), region = queue;   // the fill queue is free again
+    for (let start = 0; start < pixelCount; start++) {
+      if (resolution[start] !== COLD_VOTE || visited[start]) continue;
+      let regionEnd = 0, coldEdge = 0, warmEdge = 0;
+      region[regionEnd++] = start; visited[start] = 1;
+      for (let head = 0; head < regionEnd; head++) {
+        const i = region[head], x = i % width, y = (i / width) | 0;
+        for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny++) {
+          for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx++) {
+            const j = ny * width + nx, id = entryIdOf[j];
+            if (resolution[j] === COLD_VOTE) {
+              if (!visited[j]) { visited[j] = 1; region[regionEnd++] = j; }
+              continue;
+            }
+            if (id < 0) continue;
+            const neighbourClass = entryClass[id];
+            if (neighbourClass === COLD_VOTE) coldEdge++;
+            else if (neighbourClass !== REJECTED && neighbourClass !== BRIGHT_GREY) warmEdge++;
+          }
+        }
+      }
+      if (coldEdge >= warmEdge) continue;
+      for (let k = 0; k < regionEnd; k++) {
+        const i = region[k];
+        if (depth[i] > greyRules.keepDepthPx) { resolution[i] = 0; stats.greysLeakReverted++; }
+      }
+    }
+    for (const i of ambiguousPixels) if (resolution[i] === COLD_VOTE) stats.greysFilledCold++;
+    stats.greysDefaultedWarm = ambiguousPixels.length - stats.greysFilledCold;
+    for (const i of brightPixels) if (!resolution[i]) stats.brightGreysDropped++;
 
     // Despeckle: flip an ambiguous grey when at least 5 of its 8 neighbours
     // vote the other way. Ambiguous neighbours with no evidence count as warm.
@@ -960,13 +1005,15 @@ const RasterRecolorEngine = (() => {
   /* With engine.debugColors = true (set from the console, then refresh the
      layer) tiles show the classification instead of the palette:
        magenta  rejected colour
+       yellow   white or bright grey not reached by the cold fill (dropped)
        red      ambiguous grey resolved cold
-       blue     ambiguous grey resolved warm by vote
-       green    ambiguous grey left warm for lack of evidence
+       blue     ambiguous grey flipped warm by the despeckle
+       green    ambiguous grey not reached by the cold fill (drawn warm)
        faint    everything else, in its normal colour at low alpha
      The literals are written for little-endian platforms (0xAABBGGRR). */
   function debugColor(pixelClass, resolution, normalOutput) {
     if (pixelClass === REJECTED) return 0xffff00ff;
+    if (pixelClass === BRIGHT_GREY) return resolution === COLD_VOTE ? 0xff0000ff : 0xff00ffff;
     if (pixelClass !== AMBIGUOUS_GREY) return (normalOutput & 0x00ffffff) | 0x30000000;
     return resolution === COLD_VOTE ? 0xff0000ff : resolution === WARM_VOTE ? 0xffff0000 : 0xff00c000;
   }
@@ -981,7 +1028,7 @@ const RasterRecolorEngine = (() => {
     const entryIdOf = new Int32Array(pixelCount);                                // per pixel; −1 = transparent source
 
     // 1. Look up (or classify) each opaque pixel's colour.
-    let lastColor = -1, lastId = -1, ambiguousCount = 0, rejectedCount = 0;
+    let lastColor = -1, lastId = -1, ambiguousCount = 0, brightCount = 0, rejectedCount = 0;
     for (let i = 0; i < pixelCount; i++) {
       const o = i * 4;
       if (bytes[o + 3] === 0) { entryIdOf[i] = -1; continue; }
@@ -995,30 +1042,38 @@ const RasterRecolorEngine = (() => {
       }
       entryIdOf[i] = id;
       if (entryClass[id] === AMBIGUOUS_GREY) ambiguousCount++;
+      else if (entryClass[id] === BRIGHT_GREY) brightCount++;
       else if (entryClass[id] === REJECTED) rejectedCount++;
     }
 
     const stats = {
       opaquePixels: 0, rejectedPixels: rejectedCount, pixelsFilled: 0,
-      ambiguousGreys: ambiguousCount, greysVotedCold: 0, greysVotedWarm: 0, greysDefaultedWarm: 0,
-      greysDespeckled: 0, votingPasses: 0,
+      ambiguousGreys: ambiguousCount, greysFilledCold: 0, greysDefaultedWarm: 0, brightGreysDropped: 0,
+      greysLeakReverted: 0, greysDespeckled: 0,
     };
 
     // 2. IR only: decide warm or cold for each ambiguous grey.
-    const resolution = engine.greyRules && ambiguousCount
+    const resolution = engine.greyRules && (ambiguousCount || brightCount)
       ? resolveAmbiguousGreys(engine, entryIdOf, width, height, stats)
       : null;
 
-    // 3. Write the output colours.
+    // 3. Write the output colours. Pixels to fill from their neighbours in
+    //    step 4 (rejected colours, dropped bright greys) are marked in toFill.
+    const toFill = new Uint8Array(pixelCount);
+    let fillCount = 0;
     for (let i = 0; i < pixelCount; i++) {
       const id = entryIdOf[i];
       if (id < 0) continue;   // transparent in, transparent out
       stats.opaquePixels++;
       let output = entryOutput[id];
-      if (resolution && entryClass[id] === AMBIGUOUS_GREY) {
+      const pixelClass = entryClass[id];
+      if (pixelClass === AMBIGUOUS_GREY) {
         output = resolution[i] === COLD_VOTE ? entryGreyOptions[id].cold : entryGreyOptions[id].warm;
+      } else if (pixelClass === BRIGHT_GREY && resolution[i] !== COLD_VOTE) {
+        output = 0;
       }
-      if (engine.debugColors) output = debugColor(entryClass[id], resolution ? resolution[i] : 0, output);
+      if (!output && (pixelClass === REJECTED || pixelClass === BRIGHT_GREY)) { toFill[i] = 1; fillCount++; }
+      if (engine.debugColors) output = debugColor(pixelClass, resolution ? resolution[i] : 0, output);
       const sourceAlpha = bytes[i * 4 + 3];
       if (sourceAlpha < 255 && output) {   // soft edge in the source (e.g. the disc limb): keep it soft
         output = withAlpha(output, Math.round(alphaOf(output) * sourceAlpha / 255));
@@ -1027,20 +1082,20 @@ const RasterRecolorEngine = (() => {
     }
 
     // 4. Rejected colours are mostly bilinear blends between distant colormap
-    //    entries along sharp edges. Left transparent they would punch holes,
-    //    so fill each from the alpha-weighted mean of its matched neighbours
-    //    (already recoloured in step 3).
-    if (rejectedCount && !engine.debugColors) {
+    //    entries along sharp edges, and dropped bright greys are limb noise.
+    //    Left transparent they would punch holes, so fill each from the
+    //    alpha-weighted mean of its matched neighbours (already recoloured in
+    //    step 3).
+    if (fillCount && !engine.debugColors) {
       for (let i = 0; i < pixelCount; i++) {
-        const id = entryIdOf[i];
-        if (id < 0 || entryClass[id] !== REJECTED) continue;
+        if (!toFill[i]) continue;
         const x = i % width, y = (i / width) | 0;
         let sumR = 0, sumG = 0, sumB = 0, sumAlpha = 0, neighbours = 0;
         for (let ny = y - 1; ny <= y + 1; ny++) {
           for (let nx = x - 1; nx <= x + 1; nx++) {
             if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-            const j = ny * width + nx, neighbourId = entryIdOf[j];
-            if (neighbourId < 0 || entryClass[neighbourId] === REJECTED) continue;
+            const j = ny * width + nx;
+            if (entryIdOf[j] < 0 || toFill[j]) continue;
             const o = j * 4, alpha = bytes[o + 3];
             sumR += bytes[o] * alpha; sumG += bytes[o + 1] * alpha; sumB += bytes[o + 2] * alpha;
             sumAlpha += alpha; neighbours++;
@@ -1058,12 +1113,113 @@ const RasterRecolorEngine = (() => {
   return { getEngine, recolorImageData };
 })();
 
+/* ── Limb fade for geostationary imagery ────────────────────────
+   Near the edge of its disc a geostationary satellite looks at the Earth
+   almost sideways: pixels stretch, clouds read colder than they are, and
+   the providers' tiles end in scan-line streaks. Two things fix that:
+     • where several satellites of a group are on, each point is drawn by
+       whichever sees it most directly, with a soft cross-fade between them
+       (weights fall off as exp(−Δangle / crossFadeDeg));
+     • every satellite fades out over the last few degrees before its limb
+       (the disc edge is at 81.3° from the sub-satellite point), so lone
+       coverage — polar regions, the Indian Ocean gap — is kept almost in full.
+   The angle is the great-circle angle from the sub-satellite point; with the
+   satellite over the equator, cos(angle) = cos(lat) · cos(lon − satelliteLon). */
+const LIMB_FADE = { edgeStartDeg: 76, edgeEndDeg: 81, crossFadeDeg: 1.5 };
+
+// Satellite longitudes (°E) for the limbFade option
+const GEO_SATELLITE_LON = { goesWest: -137.0, goesEast: -75.2, himawari: 140.7, meteosat: 0.0 };
+
+const LimbFade = (() => {
+  const groups = new Map();   // group name → Set of layers
+  const pendingRedraw = new Set();
+  const DEG = Math.PI / 180;
+  const smoothstep = (lo, hi, v) => { const t = Math.min(1, Math.max(0, (v - lo) / (hi - lo))); return t * t * (3 - 2 * t); };
+
+  function register(layer) {
+    const name = layer.options.limbFade.group;
+    if (!groups.has(name)) groups.set(name, new Set());
+    groups.get(name).add(layer);
+  }
+
+  // A member was added or removed: the others' weights change, so redraw
+  // them once the current batch of toggles is done.
+  function groupChanged(layer) {
+    const name = layer.options.limbFade.group;
+    if (pendingRedraw.has(name)) return;
+    pendingRedraw.add(name);
+    setTimeout(() => {
+      pendingRedraw.delete(name);
+      for (const member of groups.get(name)) if (member !== layer && member._map) member.redraw();
+    }, 0);
+  }
+
+  /* Multiply the alpha of a drawn tile by this layer's weight at each pixel.
+     coords: the tile's x/y/z; the satellites considered are this layer and
+     the members of its group that are on a map. */
+  function apply(layer, tile, coords) {
+    const own = layer.options.limbFade;
+    const satellites = [own.lon];
+    for (const member of groups.get(own.group)) {
+      if (member !== layer && member._map) satellites.push(member.options.limbFade.lon);
+    }
+    const width = tile.width, height = tile.height, worldPx = 2 ** coords.z * width;
+
+    // cos(lat) per row and cos(lon − satLon) per column and satellite
+    const cosLat = new Float32Array(height);
+    for (let y = 0; y < height; y++) {
+      const mercatorY = Math.PI * (1 - 2 * (coords.y * height + y + 0.5) / worldPx);
+      cosLat[y] = Math.cos(Math.atan(Math.sinh(mercatorY)));
+    }
+    const count = satellites.length, cosLon = new Float32Array(width * count);
+    for (let x = 0; x < width; x++) {
+      const lon = (coords.x * width + x + 0.5) / worldPx * 360 - 180;
+      for (let s = 0; s < count; s++) cosLon[x * count + s] = Math.cos((lon - satellites[s]) * DEG);
+    }
+
+    // Weight of the first satellite (this layer) at each pixel. Rows and
+    // columns share work, but each pixel needs its own angles.
+    const { edgeStartDeg, edgeEndDeg, crossFadeDeg } = LIMB_FADE;
+    const angles = new Float32Array(count);
+    const ctx = tile.getContext('2d', { willReadFrequently: true });
+    const image = ctx.getImageData(0, 0, width, height), bytes = image.data;
+    let touched = false;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const o = (y * width + x) * 4 + 3;
+        if (!bytes[o]) continue;
+        let minAngle = Infinity;
+        for (let s = 0; s < count; s++) {
+          angles[s] = Math.acos(Math.max(-1, Math.min(1, cosLat[y] * cosLon[x * count + s]))) / DEG;
+          if (angles[s] < minAngle) minAngle = angles[s];
+        }
+        // This satellite's share of a soft-min over the satellites that can
+        // see the point, times the limb fade of the best-placed one (so a
+        // lone satellite fades out towards its own limb).
+        let sum = 0, own = 0;
+        for (let s = 0; s < count; s++) {
+          const raw = (1 - smoothstep(edgeStartDeg, edgeEndDeg, angles[s])) * Math.exp(-(angles[s] - minAngle) / crossFadeDeg);
+          sum += raw;
+          if (s === 0) own = raw;
+        }
+        const weight = sum ? own / sum * (1 - smoothstep(edgeStartDeg, edgeEndDeg, minAngle)) : 0;
+        if (weight < 0.999) { bytes[o] = Math.round(bytes[o] * weight); touched = true; }
+      }
+    }
+    if (touched) ctx.putImageData(image, 0, 0);
+  }
+
+  return { register, groupChanged, apply };
+})();
+
 /* ── Leaflet layer ──────────────────────────────────────────────
    A GridLayer that fetches the provider's tiles itself, recolours them and
    draws the result into canvas tiles. The provider has no tiles deeper than
    nativeMaxZoom, so beyond it each tile is cut from its recoloured ancestor
    and scaled up. Recoloured native tiles are cached, so each is fetched and
-   recoloured only once while in the cache.
+   recoloured only once while in the cache. Without a providerColormap the
+   provider's tiles are drawn as they are (used for the enhanced-colour IR,
+   which only needs the limb fade).
 
    Diagnostics, from the browser console on any recoloured layer (e.g. sstLayer):
      layer.recolorTimingSummary()   ms per native tile: median, p90, max, mean
@@ -1083,6 +1239,7 @@ L.GridLayer.Recolor = L.GridLayer.extend({
     pixelated: false,          // beyond nativeMaxZoom: nearest-neighbour instead of smoothed scaling
     nativeTileCacheSize: 64,   // recoloured native tiles kept for over-zoomed children
     validateOnly: false,       // check tiles against the colormap (corrupt-tile retry) but draw the provider's own colours
+    limbFade: null,            // geostationary imagery: { lon: satellite longitude, group: name } (see LimbFade)
   },
 
   initialize(options) {
@@ -1094,9 +1251,22 @@ L.GridLayer.Recolor = L.GridLayer.extend({
     this._nativeTiles = new Map();     // tile URL → Promise<canvas|null>; insertion order is LRU order
     this._redrawGeneration = 0;        // bumped on redraw so tiles still loading for an old URL are dropped
     this.recolorTimingsMs = [];        // recolour time per native tile (last 500)
-    this.greyStats = { tiles: 0, ambiguousGreys: 0, greysVotedCold: 0, greysVotedWarm: 0, greysDefaultedWarm: 0 };
+    this.greyStats = { tiles: 0, ambiguousGreys: 0, greysFilledCold: 0, greysDefaultedWarm: 0, brightGreysDropped: 0, greysLeakReverted: 0 };
     this.corruptTileCount = 0;
-    this._engine = RasterRecolorEngine.getEngine(o.providerColormap, o.palette, o.matchTolerance, o.irGreyRules || null);
+    this._engine = o.providerColormap
+      ? RasterRecolorEngine.getEngine(o.providerColormap, o.palette, o.matchTolerance, o.irGreyRules || null)
+      : null;
+    if (o.limbFade) LimbFade.register(this);
+  },
+
+  onAdd(map) {
+    L.GridLayer.prototype.onAdd.call(this, map);
+    if (this.options.limbFade) LimbFade.groupChanged(this);
+  },
+
+  onRemove(map) {
+    L.GridLayer.prototype.onRemove.call(this, map);
+    if (this.options.limbFade) LimbFade.groupChanged(this);
   },
 
   // Same contract as L.TileLayer#setUrl
@@ -1158,6 +1328,7 @@ L.GridLayer.Recolor = L.GridLayer.extend({
           canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
           const ctx = canvas.getContext('2d', { willReadFrequently: true });
           ctx.drawImage(img, 0, 0);
+          if (!this._engine) { resolve(canvas); return; }   // drawn as provided
           const startedAt = performance.now();
           const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
           // validateOnly: recolour a copy just to check it; the canvas keeps the provider's pixels
@@ -1176,7 +1347,7 @@ L.GridLayer.Recolor = L.GridLayer.extend({
           if (this.options.irGreyRules) {
             const totals = this.greyStats;
             totals.tiles++;
-            for (const key of ['ambiguousGreys', 'greysVotedCold', 'greysVotedWarm', 'greysDefaultedWarm']) totals[key] += stats[key];
+            for (const key of ['ambiguousGreys', 'greysFilledCold', 'greysDefaultedWarm', 'brightGreysDropped', 'greysLeakReverted']) totals[key] += stats[key];
           }
           this.fire('tilerecolor', { url, ms, stats });
           resolve(canvas);
@@ -1214,6 +1385,7 @@ L.GridLayer.Recolor = L.GridLayer.extend({
         const cropX = (coords.x - nativeCoords.x * magnification) * cropWidth;
         const cropY = (coords.y - nativeCoords.y * magnification) * cropHeight;
         ctx.drawImage(source, cropX, cropY, cropWidth, cropHeight, 0, 0, size.x, size.y);
+        if (this.options.limbFade) LimbFade.apply(this, tile, coords);
       }
       done(null, tile);   // a failed load gives an empty tile, never a broken image
     });
@@ -1377,6 +1549,7 @@ function initMap() {
     attribution: 'GOES-West IR &copy; <a href="https://www.nesdis.noaa.gov/" target="_blank">NOAA/NESDIS</a> via <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank">NASA GIBS</a>',
     opacity: 1,
     zIndex: 4,
+    limbFade: { lon: GEO_SATELLITE_LON.goesWest, group: 'ir-clouds' },
   });
 
   // NASA GIBS — GOES-East Band 13 Clean Infrared (covers Americas + Atlantic)
@@ -1388,6 +1561,7 @@ function initMap() {
     attribution: 'GOES-East IR &copy; <a href="https://www.nesdis.noaa.gov/" target="_blank">NOAA/NESDIS</a> via <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank">NASA GIBS</a>',
     opacity: 1,
     zIndex: 4,
+    limbFade: { lon: GEO_SATELLITE_LON.goesEast, group: 'ir-clouds' },
   });
 
   // EUMETSAT EUMETView — MTG-I FCI IR 10.5 µm full disk (0°), 10-min cadence.
@@ -1405,6 +1579,7 @@ function initMap() {
     attribution: 'Meteosat MTG-I FCI &copy; <a href="https://www.eumetsat.int/" target="_blank">EUMETSAT</a>',
     opacity: 1,
     zIndex: 4,
+    limbFade: { lon: GEO_SATELLITE_LON.meteosat, group: 'ir-clouds' },
   });
 
   // NASA GIBS — Himawari AHI Band 13 Clean Infrared (East Asia / W Pacific),
@@ -1417,31 +1592,26 @@ function initMap() {
     attribution: 'Himawari AHI &copy; <a href="https://www.data.jma.go.jp/mscweb/en/index.html" target="_blank">JMA</a> via <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank">NASA GIBS</a>',
     opacity: 1,
     zIndex: 4,
+    limbFade: { lon: GEO_SATELLITE_LON.himawari, group: 'ir-clouds' },
   });
 
   // ── Enhanced-colour IR: the providers' original colour tables, used when the
   // Satellite imagery style is "Enhanced". Same imagery as the clouds-only
-  // layers above; a colour field, so it follows the one-field rule.
-  const _irAttr = layer => layer.options.attribution;
-  const _gibsIr = product => L.tileLayer(
-    `${_gibsBase}/${product}/default/default/${_gibsTms}/{z}/{y}/{x}.png`,
-    { opacity: 0.8, maxNativeZoom: 6, zIndex: 4 }
-  );
-  goesWEnhLayer    = _gibsIr('GOES-West_ABI_Band13_Clean_Infrared');
-  goesEEnhLayer    = _gibsIr('GOES-East_ABI_Band13_Clean_Infrared');
-  himawariEnhLayer = _gibsIr('Himawari_AHI_Band13_Clean_Infrared');
-  goesWEnhLayer.options.attribution    = _irAttr(goesWLayer);
-  goesEEnhLayer.options.attribution    = _irAttr(goesELayer);
-  himawariEnhLayer.options.attribution = _irAttr(himawariLayer);
-  meteosatEnhLayer = L.tileLayer.wms('https://view.eumetsat.int/geoserver/wms', {
-    layers:      'mtg_fd:ir105_hrfi',
-    styles:      'mtg_fd:mtg_fd_ir105_hrfi_style_02',   // EUMETSAT's enhanced-IR ramp
-    format:      'image/png',
-    transparent: true,
-    opacity:     0.8,
-    zIndex:      4,
-    attribution: _irAttr(meteosatLayer),
+  // layers above; a colour field, so it follows the one-field rule. Drawn as
+  // provided (no recolour) but with the limb fade, in a group of their own.
+  const _irEnh = (source, url, nativeMaxZoom, satellite) => recolorLayer({
+    url, nativeMaxZoom, opacity: 0.8, zIndex: 4,
+    attribution: source.options.attribution,
+    limbFade: { lon: GEO_SATELLITE_LON[satellite], group: 'ir-enhanced' },
   });
+  const _gibsIrUrl = product => `${_gibsBase}/${product}/default/default/${_gibsTms}/{z}/{y}/{x}.png`;
+  goesWEnhLayer    = _irEnh(goesWLayer, _gibsIrUrl('GOES-West_ABI_Band13_Clean_Infrared'), 6, 'goesWest');
+  goesEEnhLayer    = _irEnh(goesELayer, _gibsIrUrl('GOES-East_ABI_Band13_Clean_Infrared'), 6, 'goesEast');
+  himawariEnhLayer = _irEnh(himawariLayer, _gibsIrUrl('Himawari_AHI_Band13_Clean_Infrared'), 6, 'himawari');
+  meteosatEnhLayer = _irEnh(meteosatLayer,
+    'https://view.eumetsat.int/geoserver/wms?service=WMS&request=GetMap&version=1.1.1' +
+    '&layers=mtg_fd:ir105_hrfi&styles=mtg_fd:mtg_fd_ir105_hrfi_style_02' +   // EUMETSAT's enhanced-IR ramp
+    '&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox}', 8, 'meteosat');
 
   // ── Air Mass RGB (GOES-West, GOES-East, Himawari): a composite of two
   // water-vapour channels, an ozone channel and IR. Shows dry versus moist
